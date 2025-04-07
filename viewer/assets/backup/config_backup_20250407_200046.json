@@ -1,0 +1,76 @@
+{
+  "commodities": {
+    "44": "Precursors",
+    "2267": "Base Metals",
+    "2329": "Biocells",
+    "2345": "Water",
+    "2346": "Electrolytes",
+    "2390": "Electrolytes",
+    "2393": "Bacteria",
+    "2395": "Proteins",
+    "2396": "Biofuels",
+    "2398": "Reactive Metals",
+    "2400": "Toxic Metals",
+    "2401": "Chiral Structures",
+    "3645": "Water",
+    "3683": "Oxygen"
+  },
+  "pin_types": {
+    "2254": {
+      "category": "Extractor",
+      "planet": "Generic"
+    },
+    "2256": {
+      "category": "Launchpad",
+      "planet": "Unknown"
+    },
+    "2469": {
+      "category": "Basic Industrial Facility",
+      "planet": "Lava"
+    },
+    "2473": {
+      "category": "Basic Industrial Facility",
+      "planet": "Barren"
+    },
+    "2474": {
+      "category": "Advanced Industrial Facility",
+      "planet": "Generic"
+    },
+    "2480": {
+      "category": "Advanced Industrial Facility",
+      "planet": "Unknown"
+    },
+    "2482": {
+      "category": "High-Tech Industrial Facility",
+      "planet": "Unknown"
+    },
+    "2541": {
+      "category": "Storage",
+      "planet": "Unknown"
+    },
+    "2544": {
+      "category": "Launchpad",
+      "planet": "Unknown"
+    },
+    "2552": {
+      "category": "Launchpad",
+      "planet": "Generic"
+    },
+    "2555": {
+      "category": "Launchpad",
+      "planet": "Lava"
+    },
+    "2558": {
+      "category": "Storage",
+      "planet": "Lava"
+    },
+    "2562": {
+      "category": "Storage",
+      "planet": "Unknown"
+    },
+    "2848": {
+      "category": "Extractor",
+      "planet": "Unknown"
+    }
+  }
+}

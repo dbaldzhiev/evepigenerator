@@ -3,6 +3,7 @@ import logging
 def parse_pi_json(data, config):
     """
     Parses the raw EVE PI JSON data structure into a more usable format.
+    Assumes Schematic ID == Output Commodity ID.
 
     Args:
         data (dict): The raw dictionary loaded from the JSON file.
@@ -24,14 +25,14 @@ def parse_pi_json(data, config):
 
     parsed_pins = []
     unknown_pin_types = set()
-    unknown_schematics = set()
+    unknown_commodities = set() # Will now include unknown schematic IDs
     pin_index_map = {} # Maps original 1-based index from JSON to 0-based index in parsed_pins
 
     logging.debug("--- Parsing Pins ---")
     for i, pin in enumerate(pins_data):
         original_index = i + 1 # 1-based index from JSON list order
         pin_type_id = pin.get("T")
-        schematic_id = pin.get("S")
+        schematic_id = pin.get("S") # This is the ID we assume == Output Commodity ID
         lat = pin.get("La", 0.0)
         lon = pin.get("Lo", 0.0)
         logging.debug(f"Raw Pin {original_index}: Type={pin_type_id}, Schematic={schematic_id}, Lat={lat}, Lon={lon}")
@@ -41,14 +42,23 @@ def parse_pi_json(data, config):
             continue
 
         category, planet = config.get_pin_type(pin_type_id)
-        schematic_info = config.get_schematic(schematic_id) if schematic_id is not None else None
+        schematic_info = None # Will be populated if schematic_id is valid
+        schematic_name = None
 
         if category == "Unknown":
             logging.debug(f"  Pin {original_index}: Unknown pin type ID {pin_type_id}")
             unknown_pin_types.add(pin_type_id)
-        if schematic_id is not None and schematic_info is None:
-            logging.debug(f"  Pin {original_index}: Unknown schematic ID {schematic_id}")
-            unknown_schematics.add(schematic_id)
+
+        if schematic_id is not None:
+            # Try to get schematic info (name) using the schematic_id from commodities config
+            schematic_info = config.get_schematic(schematic_id) # Uses get_commodity internally
+            if schematic_info:
+                schematic_name = schematic_info.get("name")
+                logging.debug(f"  Pin {original_index}: Found schematic/commodity name '{schematic_name}' for ID {schematic_id}")
+            else:
+                # If schematic_info is None, the commodity name is unknown
+                logging.debug(f"  Pin {original_index}: Unknown schematic/commodity ID {schematic_id}")
+                unknown_commodities.add(schematic_id) # Add to unknown commodities
 
         # The 0-based index for our internal list
         current_list_index = len(parsed_pins)
@@ -64,7 +74,8 @@ def parse_pi_json(data, config):
             "type_name": f"{category} ({planet})", # Resolved name
             "category": category,
             "schematic_id": schematic_id,
-            "schematic": schematic_info # Resolved schematic details or None
+            # Store the retrieved name directly if available
+            "schematic_name": schematic_name
         })
 
     logging.debug(f"--- Parsing Links ({len(links_data)} found) ---")
@@ -91,25 +102,46 @@ def parse_pi_json(data, config):
 
     logging.debug(f"--- Parsing Routes ({len(routes_data)} found) ---")
     parsed_routes = []
-    unknown_commodities = set()
+    # unknown_commodities set is already defined above and includes schematic IDs
     for i, route in enumerate(routes_data):
         logging.debug(f"Raw Route {i+1}: {route}") # Log raw route data
-        path = route.get("P")
-        commodity_id = route.get("T")
-        quantity = route.get("Q", 0)
+        path = route.get("P") # Path is no longer used directly, S/D are preferred
+        source_idx_1based = route.get("S") # Use direct S if available
+        dest_idx_1based = route.get("D")   # Use direct D if available
+        commodity_id = route.get("Typ") # Use 'Typ' for route commodity ID
+        quantity = route.get("Qty", 0) # Use 'Qty' for quantity
+
+        # Fallback to path if S/D are missing (less common but possible)
+        if source_idx_1based is None and isinstance(path, list) and len(path) > 0:
+            source_idx_1based = path[0]
+            logging.warning(f"Route {i+1}: Missing 'S', using first element of 'P' ({source_idx_1based}) as source.")
+        if dest_idx_1based is None and isinstance(path, list) and len(path) > 1:
+             # Use last element of path as destination if 'D' is missing
+             dest_idx_1based = path[-1]
+             logging.warning(f"Route {i+1}: Missing 'D', using last element of 'P' ({dest_idx_1based}) as destination.")
+
 
         # Validate essential route data
-        if not isinstance(path, list) or len(path) < 2:
-            logging.warning(f"Route {i + 1} has invalid 'P' path (must be list with >= 2 elements): {path}. Skipping route.")
-            continue
+        if source_idx_1based is None or dest_idx_1based is None:
+             logging.warning(f"Route {i + 1} is missing valid source or destination pin index. Skipping route. Data: {route}")
+             continue
         if commodity_id is None:
-            logging.warning(f"Route {i + 1} is missing commodity type 'T'. Skipping route.")
-            continue
+            # Attempt inference based on source pin's schematic output if Typ is missing
+            source_pin_0_idx = pin_index_map.get(source_idx_1based)
+            if source_pin_0_idx is not None:
+                source_pin_data = parsed_pins[source_pin_0_idx]
+                inferred_commodity_id = source_pin_data.get("schematic_id")
+                if inferred_commodity_id is not None:
+                    commodity_id = inferred_commodity_id
+                    logging.warning(f"Route {i + 1} is missing commodity type 'Typ'. Inferred commodity ID {commodity_id} from source pin {source_idx_1based}'s schematic.")
+                else:
+                    logging.warning(f"Route {i + 1} is missing commodity type 'Typ' and source pin {source_idx_1based} has no schematic_id. Skipping route.")
+                    continue
+            else:
+                logging.warning(f"Route {i + 1} is missing commodity type 'Typ' and source pin {source_idx_1based} could not be found. Skipping route.")
+                continue
 
-        # Extract source and destination from the path list (1-based indices)
-        source_idx_1based = path[0]
-        dest_idx_1based = path[-1]
-        logging.debug(f"  Extracted 1-based indices from path {path}: Source={source_idx_1based}, Dest={dest_idx_1based}")
+        logging.debug(f"  Processing Route: Source={source_idx_1based}, Dest={dest_idx_1based}, Commodity={commodity_id}, Qty={quantity}")
 
         # Map to internal 0-based indices
         source_0_idx = pin_index_map.get(source_idx_1based)
@@ -124,7 +156,7 @@ def parse_pi_json(data, config):
         # Resolve commodity name
         commodity_name = config.get_commodity(commodity_id)
         logging.debug(f"  Commodity ID={commodity_id}, Resolved Name='{commodity_name}', Quantity={quantity}")
-        if "Unknown" in commodity_name:
+        if f"Unknown ({commodity_id})" in commodity_name:
             logging.debug(f"    -> Added commodity ID {commodity_id} to unknown set.")
             unknown_commodities.add(commodity_id)
 
@@ -133,7 +165,7 @@ def parse_pi_json(data, config):
             "source": source_0_idx,
             "target": dest_0_idx,
             "commodity_id": commodity_id,
-            "commodity_name": commodity_name,
+            "commodity_name": commodity_name, # Store resolved name
             "quantity": quantity
         }
         parsed_routes.append(parsed_route_entry)
@@ -141,8 +173,8 @@ def parse_pi_json(data, config):
 
     logging.info(f"Parsing complete. Found {len(parsed_pins)} valid pins, {len(parsed_links)} valid links, {len(parsed_routes)} valid routes.")
     if unknown_pin_types: logging.info(f"Unknown Pin Type IDs: {sorted(list(unknown_pin_types))}")
-    if unknown_schematics: logging.info(f"Unknown Schematic IDs: {sorted(list(unknown_schematics))}")
-    if unknown_commodities: logging.info(f"Unknown Commodity IDs: {sorted(list(unknown_commodities))}")
+    # Removed logging for unknown_schematics
+    if unknown_commodities: logging.info(f"Unknown Commodity IDs (incl. schematics): {sorted(list(unknown_commodities))}")
 
     return {
         "pins": parsed_pins,
@@ -151,7 +183,7 @@ def parse_pi_json(data, config):
         "unknowns": {
             "commodity": sorted(list(unknown_commodities)),
             "pin_type": sorted(list(unknown_pin_types)),
-            "schematic": sorted(list(unknown_schematics))
+            # Removed "schematic" key from unknowns
         },
         **metadata
     }

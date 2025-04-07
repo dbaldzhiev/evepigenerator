@@ -16,20 +16,6 @@
     "3683": "Oxygen"
   },
   "pin_types": {
-    "2848": {
-      "category": "Extractor",
-      "planet": "Unknown"
-    }
-  },
-  "planet_types": {
-    "0": "Unknown",
-    "2014": "Oceanic",
-    "2015": "Temperate",
-    "2016": "Barren",
-    "2017": "Lava",
-    "2063": "Ice",
-    "2064": "Gas",
-    "4051": "Storm",
-    "4052": "Plasma"
+
   }
 }

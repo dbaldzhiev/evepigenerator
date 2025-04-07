@@ -233,18 +233,24 @@ class PIViewerApp(tk.Tk):
             self.update_status(f"Error: File not found {os.path.basename(path)}")
             logging.error(f"File not found: {path}")
             self.clear_plot()
+            self.last_parsed = None # Clear parsed data on error
+            self.current_file_path = None
             return
         except json.JSONDecodeError as e:
             messagebox.showerror("Error", f"Invalid JSON format in {os.path.basename(path)}: {e}")
             self.update_status(f"Error: Invalid JSON in {os.path.basename(path)}")
             logging.error(f"Invalid JSON in {path}: {e}")
             self.clear_plot()
+            self.last_parsed = None # Clear parsed data on error
+            self.current_file_path = None
             return
         except Exception as e:
             messagebox.showerror("Error", f"Failed to read file {os.path.basename(path)}: {e}")
             self.update_status(f"Error: Failed to read {os.path.basename(path)}")
             logging.exception(f"Error reading file {path}")
             self.clear_plot()
+            self.last_parsed = None # Clear parsed data on error
+            self.current_file_path = None
             return
 
         self.update_status(f"Parsing data from {os.path.basename(path)}...")
@@ -261,6 +267,7 @@ class PIViewerApp(tk.Tk):
             self.update_status(f"Error: Failed parsing {os.path.basename(path)}")
             logging.exception(f"Error parsing file {path}")
             self.clear_plot()
+            self.last_parsed = None # Clear parsed data on error
             return
 
         # --- Render Plot FIRST ---
@@ -272,42 +279,38 @@ class PIViewerApp(tk.Tk):
         # Create copies of unknown lists as they might be modified indirectly by callbacks
         unknown_commodities = list(parsed["unknowns"]["commodity"])
         unknown_pin_types = list(parsed["unknowns"]["pin_type"])
-        unknown_schematics = list(parsed["unknowns"]["schematic"])
+        # unknown_schematics is removed
+
+        # --- Get Planet ID from parsed data ---
+        current_planet_id = parsed.get("Pln") # Get the planet ID
+        logging.info(f"Planet ID from JSON: {current_planet_id}")
 
         # Flag to track if any resolution dialogs were shown
         resolution_needed = False
 
         if unknown_commodities:
             resolution_needed = True
-            logging.info(f"Resolving unknown commodities: {unknown_commodities}")
+            logging.info(f"Resolving unknown commodities/schematics: {unknown_commodities}")
             resolve_unknown_ids(
-                unknown_commodities,
-                "commodity",
-                list(self.config_data.data["commodities"].values()), # Pass known names
-                self.config_data,
-                self.refresh_plot_after_resolve # Use specific callback
+                unknown_ids=unknown_commodities,
+                id_type="commodity",
+                known_options=list(self.config_data.data.get("commodities", {}).values()), # Pass known names
+                config=self.config_data,
+                update_callback=self.refresh_plot_after_resolve, # Use specific callback
+                planet_id=None # Planet ID not relevant for commodities
             )
         if unknown_pin_types:
             resolution_needed = True
             logging.info(f"Resolving unknown pin types: {unknown_pin_types}")
             resolve_unknown_ids(
-                unknown_pin_types,
-                "pin_type",
-                # Provide standard categories + existing categories from config
-                list(set(["Extractor", "Launchpad", "Basic Industrial Facility", "Advanced Industrial Facility", "High-Tech Industrial Facility", "Storage Facility", "Command Center"] + [v.get('category', 'Unknown') for v in self.config_data.data["pin_types"].values()])),
-                self.config_data,
-                self.refresh_plot_after_resolve
+                unknown_ids=unknown_pin_types,
+                id_type="pin_type",
+                known_options=list(set(["Extractor", "Launchpad", "Basic Industrial Facility", "Advanced Industrial Facility", "High-Tech Industrial Facility", "Storage Facility", "Command Center"] + [v.get('category', 'Unknown') for v in self.config_data.data.get("pin_types", {}).values()])),
+                config=self.config_data,
+                update_callback=self.refresh_plot_after_resolve,
+                planet_id=current_planet_id # Pass the planet ID here
             )
-        if unknown_schematics:
-             resolution_needed = True
-             logging.info(f"Resolving unknown schematics: {unknown_schematics}")
-             resolve_unknown_ids(
-                unknown_schematics,
-                "schematic",
-                [], # No predefined list for schematics, handled by entry field
-                self.config_data,
-                self.refresh_plot_after_resolve
-            )
+        # Removed block for unknown_schematics
 
         if resolution_needed:
             self.update_status(f"Plot rendered with potential unknown IDs. Please resolve them for {os.path.basename(path)}.")
@@ -342,11 +345,13 @@ class PIViewerApp(tk.Tk):
                  self.update_status(f"Error: Failed re-processing {os.path.basename(self.current_file_path)}")
                  logging.exception(f"Error re-processing file {self.current_file_path} after ID resolution")
                  self.clear_plot()
+                 self.last_parsed = None # Clear data on error
         else:
             errmsg = "Cannot refresh: Missing file path or config data after ID resolution."
             self.update_status(errmsg)
             logging.warning(errmsg)
             self.clear_plot()
+            self.last_parsed = None # Clear data if cannot refresh
         logging.info("--- Finished refresh_plot_after_resolve ---")
 
 
@@ -363,7 +368,7 @@ class PIViewerApp(tk.Tk):
 
                 # Reset info panel to default state before rendering
                 logging.debug("Resetting info panel to default.")
-                self._setup_info_panel_default()
+                self._setup_info_panel_default() # Reset before rendering
 
                 # Render the plot, passing the info_panel and route visibility state
                 show_routes_state = self.show_routes_var.get()
