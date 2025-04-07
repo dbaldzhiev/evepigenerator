@@ -93,6 +93,10 @@
       "category": "High-Tech Industrial Facility",
       "planet": "Temperate"
     },
+    "2541": {
+      "category": "Storage Facility",
+      "planet": "Barren"
+    },
     "2544": {
       "category": "Launchpad",
       "planet": "Barren"
@@ -101,9 +105,21 @@
       "category": "Launchpad",
       "planet": "Barren"
     },
+    "2555": {
+      "category": "Launchpad",
+      "planet": "Lava"
+    },
+    "2558": {
+      "category": "Storage Facility",
+      "planet": "Lava"
+    },
     "2562": {
       "category": "Storage Facility",
       "planet": "Temperate"
+    },
+    "2848": {
+      "category": "Extractor",
+      "planet": "Barren"
     }
   },
   "planet_types": {

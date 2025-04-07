@@ -14,22 +14,23 @@ TEMPLATE_DIR = "templates"
 LOG_FILE = "pi_viewer.log"
 
 # --- Logging Setup ---
-# Use INFO level by default, change to DEBUG for more verbose route parsing logs
-logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
+logging.basicConfig(filename=LOG_FILE, level=logging.INFO, # Use INFO, DEBUG for detailed parsing/rendering
                     format='%(asctime)s - %(levelname)s - [%(module)s:%(lineno)d] - %(message)s')
 
 class PIViewerApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("EVE PI Viewer")
-        self.geometry("1200x800") # Increased size slightly
+        self.geometry("1200x800")
         self.configure(bg="#f0f0f0")
 
-        self.last_parsed = None
-        self.current_file_path = None
-        self.config_data = None # Initialize
-        self.show_routes_var = tk.BooleanVar(value=True) # Variable for route visibility
+        # --- Internal State ---
+        self.last_parsed = None         # Stores the result from parse_pi_json
+        self.current_file_path = None   # Path to the currently loaded JSON file
+        self.config_data = None         # Holds the Config object
+        self.show_routes_var = tk.BooleanVar(value=True) # Controls route visibility
 
+        # --- Load Configuration ---
         try:
             self.config_data = Config(CONFIG_PATH)
             logging.info(f"Configuration loaded successfully from {CONFIG_PATH}")
@@ -39,7 +40,7 @@ class PIViewerApp(tk.Tk):
             self.destroy()
             return
         except json.JSONDecodeError as e:
-            messagebox.showerror("Error", f"Error decoding configuration file: {CONFIG_PATH} - {e}")
+            messagebox.showerror("Error", f"Error decoding configuration file: {CONFIG_PATH}\n{e}")
             logging.error(f"Error decoding configuration file: {CONFIG_PATH} - {e}")
             self.destroy()
             return
@@ -49,41 +50,36 @@ class PIViewerApp(tk.Tk):
             self.destroy()
             return
 
+        # --- Build UI ---
         self.build_ui()
         self.update_template_list()
         self.update_status("Application ready. Load a PI JSON file or select a template.")
 
     def build_ui(self):
         # --- Main Panes ---
-        # Sidebar (Left)
         sidebar = tk.Frame(self, width=250, bg="#2c3e50")
         sidebar.pack(side="left", fill="y", padx=(0, 1), pady=0)
-        sidebar.pack_propagate(False) # Prevent sidebar from shrinking
+        sidebar.pack_propagate(False)
 
-        # Main Area (Center/Right) - will contain plot and info
         main_area = tk.Frame(self, bg="#f0f0f0")
         main_area.pack(side="right", fill="both", expand=True)
 
-        # Plot Frame (within main_area, takes most space)
         self.plot_frame = tk.Frame(main_area, bg="#ffffff") # White background for plot area
-        self.plot_frame.pack(side="left", fill="both", expand=True)
+        self.plot_frame.pack(side="left", fill="both", expand=True, padx=5, pady=5)
 
-        # Info Panel (within main_area, right side)
         self.info_panel = tk.Frame(main_area, width=250, bg="#eeeeee", relief=tk.SUNKEN, borderwidth=1)
         self.info_panel.pack(side="right", fill="y", padx=(0, 5), pady=5)
-        self.info_panel.pack_propagate(False) # Prevent info panel from shrinking
+        self.info_panel.pack_propagate(False)
 
         # --- Sidebar Widgets ---
         load_button = tk.Button(sidebar, text="Load File...", command=self.load_file_from_dialog, bg="#1abc9c", fg="white", relief=tk.FLAT, font=("Segoe UI", 10))
         load_button.pack(pady=10, padx=10, fill="x")
 
-        # Route Toggle Checkbox
         route_toggle = tk.Checkbutton(sidebar, text="Show Routes", variable=self.show_routes_var,
                                       command=self.toggle_routes, bg="#2c3e50", fg="white",
                                       selectcolor="#34495e", activebackground="#2c3e50",
-                                      activeforeground="white", font=("Segoe UI", 10))
-        route_toggle.pack(pady=(0, 10), padx=10, anchor='w')
-
+                                      activeforeground="white", font=("Segoe UI", 10), anchor='w')
+        route_toggle.pack(pady=(0, 10), padx=10, fill='x')
 
         template_label = tk.Label(sidebar, text="Templates", bg="#2c3e50", fg="white", font=("Segoe UI", 12, "bold"))
         template_label.pack(pady=(5, 5))
@@ -95,42 +91,39 @@ class PIViewerApp(tk.Tk):
         # --- Info Panel Initial Content ---
         self._setup_info_panel_default()
 
-
         # --- Status Bar ---
         self.status_bar = tk.Label(self, text="Status: Initializing...", bd=1, relief=tk.SUNKEN, anchor=tk.W, bg="#dddddd")
         self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
-
-    def _clear_info_panel(self):
-        """Clears the info panel except for the title."""
-        for widget in self.info_panel.winfo_children():
-            # Keep the title label
-            is_title = isinstance(widget, tk.Label) and widget.cget('font').endswith("bold")
-            if not is_title:
-                widget.destroy()
 
     def _setup_info_panel_default(self):
         """Sets up the default content of the info panel."""
         for widget in self.info_panel.winfo_children():
             widget.destroy() # Clear everything first
         info_title = tk.Label(self.info_panel, text="Info Panel", bg="#eeeeee", font=("Segoe UI", 12, "bold"))
-        info_title.pack(pady=(10, 5), anchor='nw', padx=10) # Anchor top-left
-        self.info_content_label = tk.Label(self.info_panel, text="Load a PI JSON file or select a template from the list.\n\nClick on a route (curved blue arrow) in the plot to see detailed route information here.", bg="#eeeeee", justify=tk.LEFT, wraplength=230)
+        info_title.pack(pady=(10, 5), anchor='nw', padx=10)
+        # --- Updated default text ---
+        self.info_content_label = tk.Label(self.info_panel,
+                                           text="Load a PI JSON file or select a template.\n\n"
+                                                "Click on a pin (marker) or a route (curved arrow) "
+                                                "in the plot to see details here.",
+                                           bg="#eeeeee", justify=tk.LEFT, wraplength=230)
         self.info_content_label.pack(pady=5, padx=10, anchor="nw")
 
-
     def update_status(self, message):
+        """Updates the status bar text and logs the message."""
         self.status_bar.config(text=f"Status: {message}")
         logging.info(f"Status Update: {message}")
         self.update_idletasks() # Force UI update
 
     def update_template_list(self):
-        self.listbox.delete(0, tk.END) # Clear existing list
+        """Refreshes the listbox with JSON files from the template directory."""
+        self.listbox.delete(0, tk.END)
+        self.template_files = [] # Reset stored list
         try:
             if not os.path.exists(TEMPLATE_DIR):
                 os.makedirs(TEMPLATE_DIR)
                 logging.warning(f"Template directory '{TEMPLATE_DIR}' not found, created.")
-                self.update_status(f"Template directory '{TEMPLATE_DIR}' created. No templates found yet.")
-                self.template_files = []
+                self.update_status(f"Template directory '{TEMPLATE_DIR}' created. No templates found.")
             else:
                 self.template_files = sorted([f for f in os.listdir(TEMPLATE_DIR) if f.endswith(".json")])
 
@@ -140,7 +133,7 @@ class PIViewerApp(tk.Tk):
             else:
                  self.listbox.config(state=tk.NORMAL)
                  for file in self.template_files:
-                    self.listbox.insert(tk.END, file)
+                    self.listbox.insert(tk.END, os.path.basename(file)) # Show only filename
 
         except Exception as e:
             messagebox.showerror("Error", f"Error reading template directory '{TEMPLATE_DIR}': {e}")
@@ -149,227 +142,210 @@ class PIViewerApp(tk.Tk):
             self.listbox.insert(tk.END, "(Error reading templates)")
             self.listbox.config(state=tk.DISABLED)
 
-
     def load_file_from_dialog(self):
+        """Opens a file dialog to select a JSON file and processes it."""
         path = filedialog.askopenfilename(
             title="Select EVE PI JSON File",
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
         )
         if path:
-            logging.info(f"File selected from dialog: {path}") # LOGGING
+            logging.info(f"File selected from dialog: {path}")
             self.current_file_path = path
-            logging.info("Clearing listbox selection.") # LOGGING
             self.listbox.selection_clear(0, tk.END) # Clear template selection
-            logging.info(f"Calling process_file for: {path}") # LOGGING
             self.process_file(path)
         else:
-            logging.info("File dialog cancelled.") # LOGGING
+            logging.info("File dialog cancelled.")
 
     def on_template_select(self, event):
-        # Check if the listbox is the source of the event
-        if event.widget != self.listbox:
-            logging.debug("Ignoring ListboxSelect event not from self.listbox")
-            return
-
+        """Handles selection changes in the template listbox."""
+        if event.widget != self.listbox: return # Ensure event is from the correct widget
         selection = self.listbox.curselection()
-        if not selection:
-            logging.debug("Ignoring ListboxSelect event with no selection.")
-            return
+        if not selection: return # No item selected
 
-        # Prevent processing if the listbox is disabled or showing placeholder text
+        # Prevent processing if listbox is disabled or shows placeholder
         if self.listbox.cget('state') == tk.DISABLED or self.listbox.get(selection[0]).startswith("("):
-            logging.debug("Ignoring ListboxSelect event on disabled or placeholder item.")
             return
 
         try:
             index = selection[0]
-            # Double check if this index is still actually selected
-            # Prevents potential race condition if selection cleared rapidly
+            # Check if index is still selected (mitigates potential race condition)
             if index not in self.listbox.curselection():
-                 logging.warning("on_template_select fired for an index that is no longer selected. Ignoring.")
+                 logging.warning("on_template_select fired for an index no longer selected. Ignoring.")
                  return
 
-            filename = self.template_files[index] # Use stored list
-            path = os.path.join(TEMPLATE_DIR, filename)
+            # Use the stored full path list if available, otherwise reconstruct
+            if hasattr(self, 'template_files') and index < len(self.template_files):
+                 filename = self.template_files[index]
+                 path = os.path.join(TEMPLATE_DIR, filename)
+            else:
+                 # Fallback: reconstruct path from listbox text (less ideal)
+                 filename_from_listbox = self.listbox.get(index)
+                 path = os.path.join(TEMPLATE_DIR, filename_from_listbox)
+                 logging.warning(f"Reconstructing template path from listbox text: {path}")
 
-            # Avoid reprocessing the exact same file if already loaded
-            # Check path AND if last_parsed exists (meaning a successful parse happened)
+
+            # Avoid reprocessing the exact same file path if already loaded and parsed
             if path == self.current_file_path and self.last_parsed:
-                logging.info(f"Template {filename} corresponds to the currently loaded file. Skipping re-process.")
-                # Ensure the selection visually remains
+                logging.info(f"Template {os.path.basename(path)} corresponds to the currently loaded file. Skipping re-process.")
+                # Ensure selection remains visually
                 self.listbox.selection_set(index)
                 return
 
             self.current_file_path = path
-            logging.info(f"Processing template selection: {filename} ({path})") # LOGGING
+            logging.info(f"Processing template selection: {os.path.basename(path)} ({path})")
             self.process_file(path)
         except IndexError:
-            # This can happen if template_files list changes between selection and processing
-            logging.warning("Listbox selection index out of range, likely due to template list update race condition.")
+            logging.warning("Listbox selection index out of range, possibly due to list update race condition.")
             self.update_status("Error selecting template. Please try again.")
-            self.update_template_list() # Refresh listbox content might help
+            self.update_template_list() # Refresh listbox
         except Exception as e:
             messagebox.showerror("Error", f"Error processing template selection: {e}")
             logging.exception("Error processing template selection")
             self.update_status(f"Error processing template: {e}")
 
-
     def process_file(self, path):
-        logging.info(f"--- Starting process_file ---")
-        logging.info(f"  Target path: {path}")
-        logging.info(f"  Current self.current_file_path: {self.current_file_path}") # Log internal state
-        # Ensure the internal state matches the path we intend to process
-        if path != self.current_file_path:
-             logging.warning(f"Mismatch: process_file called with '{os.path.basename(path)}' but self.current_file_path is '{os.path.basename(self.current_file_path)}'. Updating self.current_file_path.")
-             self.current_file_path = path # Ensure consistency
+        """Loads, parses, and renders the PI data from the given file path."""
+        file_basename = os.path.basename(path)
+        logging.info(f"--- Starting process_file for: {file_basename} ---")
+        self.update_status(f"Loading PI data from: {file_basename}...")
+        self.current_file_path = path # Update current path state
 
-        self.update_status(f"Loading PI data from: {os.path.basename(path)}...")
         try:
             with open(path, 'r') as f:
-                data = json.load(f)
+                raw_data = json.load(f)
             logging.info(f"Successfully read JSON data from {path}")
         except FileNotFoundError:
             messagebox.showerror("Error", f"File not found: {path}")
-            self.update_status(f"Error: File not found {os.path.basename(path)}")
+            self.update_status(f"Error: File not found {file_basename}")
             logging.error(f"File not found: {path}")
-            self.clear_plot()
-            self.last_parsed = None # Clear parsed data on error
-            self.current_file_path = None
+            self.clear_plot_and_state()
             return
         except json.JSONDecodeError as e:
-            messagebox.showerror("Error", f"Invalid JSON format in {os.path.basename(path)}: {e}")
-            self.update_status(f"Error: Invalid JSON in {os.path.basename(path)}")
+            messagebox.showerror("Error", f"Invalid JSON format in {file_basename}:\n{e}")
+            self.update_status(f"Error: Invalid JSON in {file_basename}")
             logging.error(f"Invalid JSON in {path}: {e}")
-            self.clear_plot()
-            self.last_parsed = None # Clear parsed data on error
-            self.current_file_path = None
+            self.clear_plot_and_state()
             return
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to read file {os.path.basename(path)}: {e}")
-            self.update_status(f"Error: Failed to read {os.path.basename(path)}")
+            messagebox.showerror("Error", f"Failed to read file {file_basename}: {e}")
+            self.update_status(f"Error: Failed to read {file_basename}")
             logging.exception(f"Error reading file {path}")
-            self.clear_plot()
-            self.last_parsed = None # Clear parsed data on error
-            self.current_file_path = None
+            self.clear_plot_and_state()
             return
 
-        self.update_status(f"Parsing data from {os.path.basename(path)}...")
+        self.update_status(f"Parsing data from {file_basename}...")
         try:
-            # Ensure config is loaded
             if not self.config_data:
                  logging.error("Configuration data is not loaded during process_file.")
-                 raise ValueError("Configuration data is not loaded.")
-            parsed = parse_pi_json(data, self.config_data)
-            self.last_parsed = parsed # Store parsed data immediately
-            logging.info(f"Successfully parsed data for {os.path.basename(path)}")
+                 raise ValueError("Configuration data is not loaded.") # Should not happen
+
+            parsed = parse_pi_json(raw_data, self.config_data)
+            if parsed is None: # Parser can return None on critical failure
+                 raise ValueError("Parsing failed critically (check logs).")
+
+            self.last_parsed = parsed # Store parsed data
+            logging.info(f"Successfully parsed data for {file_basename}")
+
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to parse data from {os.path.basename(path)}: {e}")
-            self.update_status(f"Error: Failed parsing {os.path.basename(path)}")
+            messagebox.showerror("Error", f"Failed to parse data from {file_basename}: {e}")
+            self.update_status(f"Error: Failed parsing {file_basename}")
             logging.exception(f"Error parsing file {path}")
-            self.clear_plot()
-            self.last_parsed = None # Clear parsed data on error
+            self.clear_plot_and_state()
             return
 
         # --- Render Plot FIRST ---
         # Render the plot even if there are unknowns. They will show as "Unknown".
         logging.info("Calling refresh_plot (initial render before potential ID resolution).")
-        self.refresh_plot()
+        self.refresh_plot() # This now uses self.last_parsed
 
         # --- Check for and Resolve Unknowns AFTER rendering initial plot ---
-        # Create copies of unknown lists as they might be modified indirectly by callbacks
         unknown_commodities = list(parsed["unknowns"]["commodity"])
         unknown_pin_types = list(parsed["unknowns"]["pin_type"])
-        # unknown_schematics is removed
-
-        # --- Get Planet ID from parsed data ---
-        current_planet_id = parsed.get("planet_id") # <<< Get planet_id from parser result
+        current_planet_id = parsed.get("planet_id") # Get planet_id from parser result
         logging.info(f"Planet ID from JSON parser: {current_planet_id}")
 
-        # Flag to track if any resolution dialogs were shown
         resolution_needed = False
-
         if unknown_commodities:
             resolution_needed = True
-            logging.info(f"Resolving unknown commodities/schematics: {unknown_commodities}")
+            logging.info(f"Resolving unknown commodities: {unknown_commodities}")
             resolve_unknown_ids(
-                unknown_ids=unknown_commodities,
-                id_type="commodity",
-                known_options=list(self.config_data.data.get("commodities", {}).values()), # Pass known names
-                config=self.config_data,
-                update_callback=self.refresh_plot_after_resolve, # Use specific callback
-                planet_id=None # Planet ID not relevant for commodities
+                unknown_ids=unknown_commodities, id_type="commodity",
+                known_options=list(self.config_data.data.get("commodities", {}).values()),
+                config=self.config_data, update_callback=self.refresh_plot_after_resolve,
+                planet_id=None # Not needed for commodities
             )
         if unknown_pin_types:
             resolution_needed = True
             logging.info(f"Resolving unknown pin types: {unknown_pin_types}")
+            # Provide known categories + any existing from config as suggestions
+            known_categories = list(set(
+                ["Extractor", "Launchpad", "Basic Industrial Facility", "Advanced Industrial Facility",
+                 "High-Tech Industrial Facility", "Storage Facility", "Command Center"] +
+                [v.get('category', 'Unknown') for v in self.config_data.data.get("pin_types", {}).values()]
+            ))
             resolve_unknown_ids(
-                unknown_ids=unknown_pin_types,
-                id_type="pin_type",
-                # Provide known categories as suggestions
-                known_options=list(set(["Extractor", "Launchpad", "Basic Industrial Facility", "Advanced Industrial Facility", "High-Tech Industrial Facility", "Storage Facility", "Command Center"] + [v.get('category', 'Unknown') for v in self.config_data.data.get("pin_types", {}).values()])),
-                config=self.config_data,
-                update_callback=self.refresh_plot_after_resolve,
-                planet_id=current_planet_id # <<< Pass the planet ID here
+                unknown_ids=unknown_pin_types, id_type="pin_type",
+                known_options=known_categories,
+                config=self.config_data, update_callback=self.refresh_plot_after_resolve,
+                planet_id=current_planet_id # Pass the planet ID
             )
-        # Removed block for unknown_schematics
 
         if resolution_needed:
-            self.update_status(f"Plot rendered with potential unknown IDs. Please resolve them for {os.path.basename(path)}.")
-            logging.info(f"Unknown IDs found for {os.path.basename(path)}. Resolution dialogs triggered.")
+            self.update_status(f"Plot rendered. Resolve unknown IDs for {file_basename}.")
+            logging.info(f"Unknown IDs found for {file_basename}. Resolution dialogs triggered.")
         else:
-            # If no resolution was needed, the initial render was final for this load
-            self.update_status(f"Plot rendered successfully for {os.path.basename(path)}.")
-            logging.info(f"Plot rendered successfully for {os.path.basename(path)} (no unknown IDs found).")
-        logging.info(f"--- Finished process_file for {os.path.basename(path)} ---")
+            self.update_status(f"Plot rendered successfully for {file_basename}.")
+            logging.info(f"Plot rendered successfully for {file_basename} (no unknown IDs found).")
 
+        logging.info(f"--- Finished process_file for {file_basename} ---")
 
     def refresh_plot_after_resolve(self):
-        """Callback specifically for after ID resolution. Re-parses and re-renders."""
+        """Callback after ID resolution. Re-parses the current file and re-renders."""
         self.update_status("IDs resolved. Re-parsing and refreshing plot...")
         logging.info("--- Starting refresh_plot_after_resolve ---")
-        if self.current_file_path and self.config_data:
-            logging.info(f"Re-processing file: {self.current_file_path}")
-            # Re-parse the *original* data with the *updated* config
+        if self.current_file_path and self.config_data and os.path.exists(self.current_file_path):
+            file_basename = os.path.basename(self.current_file_path)
+            logging.info(f"Re-processing file: {file_basename}")
             try:
+                # Re-read and re-parse the *original* data with the *updated* config
                 with open(self.current_file_path, 'r') as f:
-                    data = json.load(f)
+                    raw_data = json.load(f)
                 logging.info("Re-parsing data with updated config...")
-                # Re-parse using the potentially updated config
-                self.last_parsed = parse_pi_json(data, self.config_data)
+                self.last_parsed = parse_pi_json(raw_data, self.config_data) # Update parsed data
+
+                if self.last_parsed is None:
+                    raise ValueError("Re-parsing failed critically after ID resolution.")
+
                 logging.info("Re-parsing complete. Calling refresh_plot.")
-                # Now refresh the plot with the newly parsed data
-                self.refresh_plot()
-                self.update_status(f"Plot refreshed with resolved IDs for {os.path.basename(self.current_file_path)}.")
-                logging.info(f"Plot refreshed successfully after ID resolution for {os.path.basename(self.current_file_path)}.")
+                self.refresh_plot() # Re-render using the new self.last_parsed
+                self.update_status(f"Plot refreshed with resolved IDs for {file_basename}.")
+                logging.info(f"Plot refreshed successfully after ID resolution for {file_basename}.")
             except Exception as e:
                  messagebox.showerror("Error", f"Failed to re-process file after ID resolution: {e}")
-                 self.update_status(f"Error: Failed re-processing {os.path.basename(self.current_file_path)}")
+                 self.update_status(f"Error: Failed re-processing {file_basename}")
                  logging.exception(f"Error re-processing file {self.current_file_path} after ID resolution")
-                 self.clear_plot()
-                 self.last_parsed = None # Clear data on error
+                 self.clear_plot_and_state()
         else:
-            errmsg = "Cannot refresh: Missing file path or config data after ID resolution."
+            errmsg = "Cannot refresh: Missing or invalid file path, or config data after ID resolution."
             self.update_status(errmsg)
             logging.warning(errmsg)
-            self.clear_plot()
-            self.last_parsed = None # Clear data if cannot refresh
+            self.clear_plot_and_state()
         logging.info("--- Finished refresh_plot_after_resolve ---")
 
-
     def refresh_plot(self):
-        """Renders the plot based on self.last_parsed."""
+        """Renders the plot based on self.last_parsed and current settings."""
         logging.debug("--- Starting refresh_plot ---")
-        if hasattr(self, "last_parsed") and self.last_parsed:
+        if self.last_parsed:
             logging.info("Rendering plot based on self.last_parsed data.")
             try:
-                # Clear previous plot
-                logging.debug("Clearing previous plot widgets.")
-                for widget in self.plot_frame.winfo_children():
-                    widget.destroy()
+                # Clear previous plot widgets (render function does this now)
+                # logging.debug("Clearing previous plot widgets.")
+                # for widget in self.plot_frame.winfo_children():
+                #     widget.destroy()
 
-                # Reset info panel to default state before rendering
-                logging.debug("Resetting info panel to default.")
-                self._setup_info_panel_default() # Reset before rendering
+                # Reset info panel handled within render function now
+                # logging.debug("Resetting info panel to default.")
+                # self._setup_info_panel_default()
 
                 # Render the plot, passing the info_panel and route visibility state
                 show_routes_state = self.show_routes_var.get()
@@ -377,47 +353,55 @@ class PIViewerApp(tk.Tk):
                 render_matplotlib_plot(self.last_parsed, self.config_data, self.plot_frame,
                                        self.info_panel, show_routes=show_routes_state)
                 logging.debug("render_matplotlib_plot finished.")
-                # Status update handled by calling function (process_file or refresh_plot_after_resolve or toggle_routes)
+                # Status is usually updated by the caller (process_file, refresh_plot_after_resolve, toggle_routes)
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to render plot: {e}")
                 self.update_status("Error: Failed to render plot.")
                 logging.exception("Plot rendering error")
-                self.clear_plot() # Attempt to clear frame on error
+                self.clear_plot_display() # Clear display on error
         else:
-            # This case should ideally not be hit if called correctly, but good failsafe
             self.update_status("No data available to render plot.")
             logging.warning("refresh_plot called without valid self.last_parsed data.")
-            self.clear_plot()
+            self.clear_plot_display() # Clear display if no data
         logging.debug("--- Finished refresh_plot ---")
 
-    def clear_plot(self):
-        """Clears the plot area and resets info panel."""
-        logging.info("Clearing plot area and resetting info panel.")
+    def clear_plot_display(self):
+        """Clears only the plot area and resets the info panel display."""
+        logging.info("Clearing plot area display and resetting info panel.")
         for widget in self.plot_frame.winfo_children():
             widget.destroy()
-        # Display a message in the plot area
-        tk.Label(self.plot_frame, text="No plot data loaded or error during rendering.", bg="#ffffff").pack(expand=True)
+        tk.Label(self.plot_frame, text="Load a file or select a template.", bg="#ffffff").pack(expand=True)
+        self._setup_info_panel_default() # Reset info panel
 
-        # Reset info panel to its default state
-        self._setup_info_panel_default()
+    def clear_plot_and_state(self):
+        """Clears plot, resets info panel, and clears internal parsed data state."""
+        logging.info("Clearing plot, resetting info panel, and clearing parsed state.")
+        self.last_parsed = None
+        self.current_file_path = None # Also clear current file path on critical errors
+        self.clear_plot_display()
+        # Optionally clear listbox selection?
+        # self.listbox.selection_clear(0, tk.END)
+
 
     def toggle_routes(self):
-        """Called when the 'Show Routes' checkbox is toggled."""
+        """Handles the 'Show Routes' checkbox toggle."""
         route_state = self.show_routes_var.get()
+        state_text = 'shown' if route_state else 'hidden'
         logging.info(f"Route visibility toggled to: {route_state}")
-        self.update_status(f"Routes {'shown' if route_state else 'hidden'}. Refreshing plot...")
-        # Re-render the plot with the new setting
-        # Ensure we have data to render
+        self.update_status(f"Routes {state_text}. Refreshing plot...")
+
+        # Re-render the plot with the new setting IF data exists
         if self.last_parsed:
             self.refresh_plot()
-            self.update_status(f"Plot refreshed. Routes are {'shown' if route_state else 'hidden'}.")
+            self.update_status(f"Plot refreshed. Routes are {state_text}.")
         else:
             logging.warning("Toggle routes called but no data loaded.")
             self.update_status("Load data to toggle route visibility.")
 
 
 if __name__ == "__main__":
-    logging.info("Starting PI Viewer Application.")
+    logging.info("--- Starting PI Viewer Application ---")
     app = PIViewerApp()
     app.mainloop()
-    logging.info("PI Viewer Application finished.")
+    logging.info("--- PI Viewer Application finished ---")
+
