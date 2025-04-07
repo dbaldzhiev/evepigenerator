@@ -31,10 +31,3 @@ This tool helps players understand the structure, connections, and material flow
 *   **Python:** Version 3.6 or higher recommended.
 *   **Tkinter:** Usually included with standard Python installations. If not, you may need to install it separately (e.g., `sudo apt-get install python3-tk` on Debian/Ubuntu, `brew install python-tk` on macOS).
 *   **Matplotlib:** For plotting the layout (`pip install matplotlib`).
-
-## Installation
-
-1.  **Clone or Download:** Get the project files:
-    ```bash
-    git clone <your-repository-url>
-    cd eve-pi-viewer
