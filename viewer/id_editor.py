@@ -74,6 +74,7 @@ def resolve_unknown_ids(unknown_ids, id_type, known_options, config, update_call
         # --- Get Planet Name if resolving pin types ---
         resolved_planet_name = "Unknown" # Default
         if id_type == "pin_type":
+            # Look up the planet name using the provided planet_id
             resolved_planet_name = config.get_planet_name(planet_id)
             logging.info(f"Using planet name '{resolved_planet_name}' for new pin types (resolved from ID: {planet_id})")
         # --- End Get Planet Name ---
@@ -89,7 +90,8 @@ def resolve_unknown_ids(unknown_ids, id_type, known_options, config, update_call
                  # Assuming selection is the category name
                  # --- Use the resolved planet name ---
                  logging.info(f"Adding/Updating pin type: ID={uid}, Category='{selection}', Planet='{resolved_planet_name}'")
-                 config.add_pin_type(uid, category=selection, planet=resolved_planet_name) # Use resolved planet name
+                 # Pass the resolved planet name to add_pin_type
+                 config.add_pin_type(uid, category=selection, planet=resolved_planet_name)
                  resolved_count += 1
 
         if resolved_count > 0:

@@ -282,8 +282,8 @@ class PIViewerApp(tk.Tk):
         # unknown_schematics is removed
 
         # --- Get Planet ID from parsed data ---
-        current_planet_id = parsed.get("Pln") # Get the planet ID
-        logging.info(f"Planet ID from JSON: {current_planet_id}")
+        current_planet_id = parsed.get("planet_id") # <<< Get planet_id from parser result
+        logging.info(f"Planet ID from JSON parser: {current_planet_id}")
 
         # Flag to track if any resolution dialogs were shown
         resolution_needed = False
@@ -305,10 +305,11 @@ class PIViewerApp(tk.Tk):
             resolve_unknown_ids(
                 unknown_ids=unknown_pin_types,
                 id_type="pin_type",
+                # Provide known categories as suggestions
                 known_options=list(set(["Extractor", "Launchpad", "Basic Industrial Facility", "Advanced Industrial Facility", "High-Tech Industrial Facility", "Storage Facility", "Command Center"] + [v.get('category', 'Unknown') for v in self.config_data.data.get("pin_types", {}).values()])),
                 config=self.config_data,
                 update_callback=self.refresh_plot_after_resolve,
-                planet_id=current_planet_id # Pass the planet ID here
+                planet_id=current_planet_id # <<< Pass the planet ID here
             )
         # Removed block for unknown_schematics
 

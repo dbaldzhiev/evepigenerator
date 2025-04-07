@@ -11,17 +11,19 @@ def parse_pi_json(data, config):
 
     Returns:
         dict: A dictionary containing parsed pins, links, routes, unknowns,
-              and metadata.
+              planet ID, and metadata.
     """
     pins_data = data.get("P", [])
     links_data = data.get("L", [])
     routes_data = data.get("R", [])
+    planet_id = data.get("Pln") # <<< Extract Planet ID
     metadata = {
         "cmdctr": data.get("CmdCtrLv"),
         "diameter": data.get("Diam"),
         "comment": data.get("Cmt")
+        # Note: Planet ID is now returned separately, not in metadata dict
     }
-    logging.info(f"Raw data contains {len(pins_data)} pins, {len(links_data)} links, {len(routes_data)} routes.")
+    logging.info(f"Raw data contains {len(pins_data)} pins, {len(links_data)} links, {len(routes_data)} routes. Planet ID: {planet_id}")
 
     parsed_pins = []
     unknown_pin_types = set()
@@ -41,13 +43,15 @@ def parse_pi_json(data, config):
             logging.warning(f"Pin {original_index} missing 'T' (type ID). Skipping.")
             continue
 
-        category, planet = config.get_pin_type(pin_type_id)
+        # Get category and associated planet name *from config*
+        category, planet_name_from_config = config.get_pin_type(pin_type_id)
         schematic_info = None # Will be populated if schematic_id is valid
         schematic_name = None
 
         if category == "Unknown":
             logging.debug(f"  Pin {original_index}: Unknown pin type ID {pin_type_id}")
             unknown_pin_types.add(pin_type_id)
+            # Note: planet_name_from_config will also be "Unknown" here
 
         if schematic_id is not None:
             # Try to get schematic info (name) using the schematic_id from commodities config
@@ -71,7 +75,8 @@ def parse_pi_json(data, config):
             "lat": lat,
             "lon": lon,
             "type_id": pin_type_id,
-            "type_name": f"{category} ({planet})", # Resolved name
+            # Use the category and planet name resolved from config for display
+            "type_name": f"{category} ({planet_name_from_config})",
             "category": category,
             "schematic_id": schematic_id,
             # Store the retrieved name directly if available
@@ -180,6 +185,7 @@ def parse_pi_json(data, config):
         "pins": parsed_pins,
         "links": parsed_links,
         "routes": parsed_routes,
+        "planet_id": planet_id, # <<< Include planet ID here
         "unknowns": {
             "commodity": sorted(list(unknown_commodities)),
             "pin_type": sorted(list(unknown_pin_types)),

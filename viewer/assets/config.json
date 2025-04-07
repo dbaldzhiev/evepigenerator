@@ -1,9 +1,31 @@
 {
   "commodities": {
+    "12836": "Transcranial Microcontrollers",
+    "15317": "Genetically Enhanced Livestock",
+    "17136": "Ukomi Superconductors",
+    "17392": "Data Chips",
+    "17898": "High-tech Transmitters",
     "2267": "Base Metals",
+    "2312": "Supertensile Plastics",
+    "2317": "Oxides",
+    "2319": "Test Cultures",
+    "2321": "Polyaramids",
+    "2327": "Microfiber Shielding",
+    "2328": "Water-Cooled CPU",
     "2329": "Biocells",
+    "2344": "Condensates",
     "2345": "Water",
-    "2346": "Electrolytes",
+    "2346": "Synthetic Synapses",
+    "2348": "Gel-Matrix Biopaste",
+    "2349": "Supercomputers",
+    "2351": "Smartfab Units",
+    "2352": "Nuclear Reactors",
+    "2354": "Neocoms",
+    "2358": "Biotech Research Reports",
+    "2360": "Industrial Explosives",
+    "2361": "Hermetic Membranes",
+    "2366": "Hazmat Detection Systems",
+    "2367": "Cryoprotectant Solution",
     "2390": "Electrolytes",
     "2393": "Bacteria",
     "2395": "Proteins",
@@ -11,25 +33,82 @@
     "2398": "Reactive Metals",
     "2400": "Toxic Metals",
     "2401": "Chiral Structures",
+    "2463": "Nanites",
+    "2867": "Broadcast Node",
+    "2868": "Integrity Response Drones",
+    "2869": "Nano-Factory",
+    "2870": "Organic Mortar Applicators",
+    "2871": "Recursive Computing Module",
+    "2872": "Self-Harmonizing Power Core",
+    "2875": "Sterile Conduits",
     "2876": "Wetware Mainframe",
+    "28974": "Vaccines",
     "3645": "Water",
-    "3683": "Oxygen"
+    "3683": "Oxygen",
+    "3689": "Mechanical Parts",
+    "3691": "Synthetic Oil",
+    "3693": "Fertilizer",
+    "3695": "Polytextiles",
+    "3697": "Silicate Glass",
+    "3725": "Livestock",
+    "3775": "Viral Agent",
+    "3828": "Construction Blocks",
+    "44": "Enriched Uranium",
+    "9830": "Rocket Fuel",
+    "9832": "Coolant",
+    "9834": "Guidance Systems",
+    "9836": "Consumer Electronics",
+    "9838": "Superconductors",
+    "9840": "Transmitter",
+    "9842": "Miniature Electronics",
+    "9846": "Planetary Vehicles",
+    "9848": "Robotics"
   },
   "pin_types": {
-    "2848": {
-      "category": "Extractor",
-      "planet": "Unknown"
+    "2256": {
+      "category": "Launchpad",
+      "planet": "Temperate"
+    },
+    "2469": {
+      "category": "Basic Industrial Facility",
+      "planet": "Lava"
+    },
+    "2473": {
+      "category": "Basic Industrial Facility",
+      "planet": "Barren"
+    },
+    "2474": {
+      "category": "Advanced Industrial Facility",
+      "planet": "Barren"
+    },
+    "2475": {
+      "category": "High-Tech Industrial Facility",
+      "planet": "Barren"
+    },
+    "2480": {
+      "category": "Advanced Industrial Facility",
+      "planet": "Temperate"
+    },
+    "2482": {
+      "category": "High-Tech Industrial Facility",
+      "planet": "Temperate"
+    },
+    "2544": {
+      "category": "Launchpad",
+      "planet": "Barren"
+    },
+    "2552": {
+      "category": "Launchpad",
+      "planet": "Barren"
+    },
+    "2562": {
+      "category": "Storage Facility",
+      "planet": "Temperate"
     }
   },
   "planet_types": {
     "0": "Unknown",
-    "2014": "Oceanic",
-    "2015": "Temperate",
-    "2016": "Barren",
-    "2017": "Lava",
-    "2063": "Ice",
-    "2064": "Gas",
-    "4051": "Storm",
-    "4052": "Plasma"
+    "2015": "Lava",
+    "2016": "Barren"
   }
 }

@@ -1,4 +1,6 @@
 pi_viewer.log
-viewer/__pycache__/
+viewer/__pycache__
 .venv/
 .vscode/
+templates/*
+viewer/assets/backup/*
