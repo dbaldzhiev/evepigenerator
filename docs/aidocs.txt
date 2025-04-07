@@ -1,4 +1,6 @@
 EVE Online Planetary Interaction (PI) Template JSON Documentation
+Version: 1.1 (Updated 2024-07-28)
+
 This document details the structure and interpretation of the JSON format used when exporting Planetary Interaction colony layouts ("templates") from the EVE Online client. Understanding this format is crucial for developers creating third-party tools for visualizing, analyzing, or sharing PI setups.
 
 1. Introduction
@@ -6,11 +8,12 @@ EVE Online allows players to export their planetary colony layouts as JSON strin
 
 Target Audience: Developers of third-party EVE Online applications, tools, or websites dealing with PI visualization or analysis.
 
-Key Challenge: The JSON format uses internal Type IDs and Schematic IDs. To make sense of the template, an external mapping (configuration) is required to translate these IDs into human-readable names (e.g., Facility types, Commodity names, Schematic names) and understand recipes (schematic inputs/outputs).
+Key Challenge: The JSON format uses internal Type IDs and Schematic IDs. To make sense of the template, an external mapping (configuration) is required to translate these IDs into human-readable names (e.g., Facility types, Commodity names, Schematic names) and potentially understand recipes (schematic inputs/outputs, although recipe info is NOT part of the export).
 
 2. Overall JSON Schema
 A typical exported PI template JSON object has the following top-level keys:
 
+```json
 {
   "CmdCtrLv": 5,                    // Integer: Command Center level required
   "Cmt": "My Awesome P2 Factory",   // String: User-defined template name/comment
@@ -20,160 +23,3 @@ A typical exported PI template JSON object has the following top-level keys:
   "L": [ ... ],                   // List: Link definitions
   "R": [ ... ]                    // List: Route definitions
 }
-Use code with caution.
-Json
-3. Detailed Section Breakdown
-3.1. Metadata Keys
-CmdCtrLv (Integer): The minimum Command Center upgrade level required to deploy this template.
-
-Cmt (String): The name or comment assigned to the template by the user in-game.
-
-Diam (Float): The diameter of the planet type this template was likely designed for. Primarily informational, potentially useful for visual scaling.
-
-Pln (Integer): The typeID of the planet type (e.g., Barren, Lava, Gas). This is not a specific planet ID, but a category ID. Can be used with external data (like the EVE SDE) to determine environmental context.
-
-3.2. P - Pins (Structures)
-This is a list of objects, where each object represents a structure placed on the planet. The order of pins in this list is crucial, as Links (L) and Routes (R) refer to pins using 1-based indices based on this list order.
-
-"P": [
-  { // Pin 1 (Index 0 in the list)
-    "H": 0,         // Integer: Unknown significance, often 0. Possibly "Heads" for extractors?
-    "La": 1.12633,  // Float: Latitude coordinate.
-    "Lo": 1.54042,  // Float: Longitude coordinate.
-    "S": null,      // Integer | null: Schematic ID installed (if factory), null otherwise.
-    "T": 2552       // Integer: Type ID of the structure (e.g., Launchpad, Factory, ECU).
-  },
-  { // Pin 2 (Index 1 in the list)
-    "H": 0,
-    "La": 1.12962,
-    "Lo": 1.54675,
-    "S": 2329,      // Schematic ID 2329 (Biocells) is installed here.
-    "T": 2474       // Type ID 2474 (Advanced Industrial Facility).
-  },
-  // ... more pins
-]
-Use code with caution.
-Json
-La, Lo: Coordinates used for plotting the pin's location. The exact coordinate system origin and orientation might require inversion/transformation for display in standard plotting libraries (e.g., Matplotlib often requires inverting Y and potentially X axes to match the in-game view).
-
-T (Type ID): Identifies the building. Requires an external mapping (see Configuration section) to determine if it's a Launchpad, Basic Factory, ECU, Storage Facility, etc., and potentially its planet-specific variant (e.g., Barren Launchpad vs. Lava Launchpad).
-
-S (Schematic ID): If the pin is a factory (T maps to a factory type), this ID identifies the recipe being used. Requires an external mapping to get the Schematic Name (e.g., "Biocells") and its Input/Output commodities. If null, no schematic is installed (e.g., Launchpads, Storage, ECUs). Crucial Assumption: In many EVE PI contexts and tools, it's assumed that the Schematic ID is identical to the Type ID of the primary Commodity it produces. While generally true, verification via SDE is recommended.
-
-3.3. L - Links
-This is a list of objects, defining the directed physical connections (pipes) between pins.
-
-"L": [
-  { // Link 1 (Index 0 in the list)
-    "D": 1,   // Integer: Destination Pin Index (1-based). Refers to P[0].
-    "Lv": 0,  // Integer: Link upgrade level (0-4). Affects transfer speed/capacity.
-    "S": 11   // Integer: Source Pin Index (1-based). Refers to P[10].
-  },
-  { // Link 2 (Index 1 in the list)
-    "D": 1,   // Refers to P[0].
-    "Lv": 0,
-    "S": 12   // Refers to P[11].
-  },
-  // ... more links
-]
-Use code with caution.
-Json
-S (Source Index): The 1-based index of the pin in the P list where the link originates. S: 1 refers to the first pin in the P list (P[0]).
-
-D (Destination Index): The 1-based index of the pin in the P list where the link terminates. D: 1 refers to the first pin in the P list (P[0]).
-
-Lv (Level): The upgrade level of the link (0 to 4).
-
-3.4. R - Routes
-This is a list of objects defining the specific commodities being transported between pins along the physical links.
-
-"R": [
-  { // Route 1 (Index 0 in the list)
-    "D": 1,    // Integer: Destination Pin Index (1-based). Refers to P[0].
-    "Qty": 3000,// Integer: Quantity. Often default/placeholder, not actual rate.
-    "S": 11,   // Integer: Source Pin Index (1-based). Refers to P[10].
-    "Typ": 44  // Integer: Commodity Type ID being routed (e.g., 44 = Precursor Raw Materials). Can be null.
-  },
-  { // Route 2 (Index 1 in the list)
-    "D": 1,    // Refers to P[0].
-    "Qty": 6000,
-    "S": 5,    // Refers to P[4].
-    "Typ": 2396 // Commodity Type ID (e.g., 2396 = Biocells).
-  },
-  // ... more routes
-]
-Use code with caution.
-Json
-S (Source Index): The 1-based index of the pin in the P list where the route originates.
-
-D (Destination Index): The 1-based index of the pin in the P list where the route terminates.
-
-Typ (Type ID): The typeID of the specific commodity being transported by this route. This requires an external mapping to get the commodity name (e.g., "Biocells"). This field can be null or missing in some exports, requiring inference based on the source pin's schematic output.
-
-Qty (Quantity): Theoretically the amount transferred per cycle/hour. However, in exported templates, this often seems to be a default value (like 3000 for P0->P1) or 0 and may not reflect the actual configured flow rate in-game.
-
-Route vs. Link: A route defined in R should ideally correspond to a physical link defined in L between the same Source (S) and Destination (D) pins. However, the export format can contain routes without a matching link, or links without active routes. A robust parser should handle these potential inconsistencies.
-
-4. Key Concepts and Relationships Summary
-Pins (P) are structures with TypeID (T) and Coordinates (La, Lo). Factories also have a SchematicID (S).
-
-Links (L) are directed physical connections between pins, identified by 1-based Source and Destination indices referencing the P list.
-
-Routes (R) define the flow of a specific Commodity TypeID (Typ) between pins (using 1-based Source/Destination indices) over a Link.
-
-Schematics (P[i].S) define recipes. The relation Schematic -> Inputs/Output is not in the JSON and requires external data. The assumption SchematicID == OutputCommodityID is often used.
-
-External Configuration is mandatory to map T (Pin Type), S (Schematic), and Typ (Commodity) IDs to names and understand recipes.
-
-5. Parsing Strategy (Conceptual)
-A third-party application parsing this JSON would typically perform these steps:
-
-Load JSON: Parse the template string into a data structure (e.g., dictionary/object).
-
-Load Configuration: Load an external configuration file (e.g., YAML, JSON) containing mappings for Type IDs, Schematic IDs, Commodity IDs, and recipes (Inputs/Outputs per schematic).
-
-Process Pins (P list):
-
-Iterate through the P list, storing each pin's data (coords, Type ID, Schematic ID) using its 0-based list index as an internal identifier.
-
-Use the configuration to look up the Pin Type Name (e.g., "Launchpad") based on T.
-
-If S is not null, use the configuration to look up the Schematic Name based on S.
-
-Process Links (L list):
-
-Iterate through the L list.
-
-For each link, get the S and D values.
-
-Crucially, convert these 1-based indices to 0-based indices (e.g., internal_source_index = S - 1) to correctly reference the internally stored pins.
-
-Store link information, potentially creating a lookup map (internal_source_index, internal_dest_index) -> link_list_index for efficient route association.
-
-Process Routes (R list):
-
-Iterate through the R list.
-
-For each route, get S, D, and Typ.
-
-Convert S and D to 0-based internal indices.
-
-If Typ is present, use the configuration to look up the Commodity Name.
-
-If Typ is null or missing: Attempt inference. The most reliable inference is based on the source pin's schematic output. Use the assumption OutputCommodityID = SchematicID for the source pin (P[S-1].S), then look up the name for that ID in the commodity configuration.
-
-Find the corresponding Link index using the lookup map created in step 4 and the internal source/destination indices.
-
-Associate the routed Commodity (Name and ID) with the identified Link object.
-
-Inference (Commodity Names):
-
-After initial processing, iterate through factory pins with known schematics.
-
-For each schematic, determine its output ID (via assumption SchID == OutputID) and input IDs (from config).
-
-Check if the names for all these associated commodity IDs are known (present in the commodity config).
-
-If exactly one ID's name is unknown, and that ID is the output ID, and the schematic has a known name, infer that the missing commodity's name is the same as the schematic's name. Log this inference for the user to confirm and add to their configuration.
-
-Visualize/Analyze: Use the processed pin locations, link connections, associated route commodities, and configuration names/styles to generate output. Remember to handle potential coordinate system inversions for plotting.

@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox, simpledialog, scrolledtext # Added scrolledtext
 from viewer.config import Config
 from viewer.parser import parse_pi_json
 from viewer.visualizer import render_matplotlib_plot
@@ -53,7 +53,7 @@ class PIViewerApp(tk.Tk):
         # --- Build UI ---
         self.build_ui()
         self.update_template_list()
-        self.update_status("Application ready. Load a PI JSON file or select a template.")
+        self.update_status("Application ready. Load a PI JSON file, paste JSON, or select a template.")
 
     def build_ui(self):
         # --- Main Panes ---
@@ -73,7 +73,11 @@ class PIViewerApp(tk.Tk):
 
         # --- Sidebar Widgets ---
         load_button = tk.Button(sidebar, text="Load File...", command=self.load_file_from_dialog, bg="#1abc9c", fg="white", relief=tk.FLAT, font=("Segoe UI", 10))
-        load_button.pack(pady=10, padx=10, fill="x")
+        load_button.pack(pady=(10, 5), padx=10, fill="x") # Adjusted padding
+
+        # --- Add Paste Button ---
+        paste_button = tk.Button(sidebar, text="Paste JSON...", command=self.paste_json_from_dialog, bg="#3498db", fg="white", relief=tk.FLAT, font=("Segoe UI", 10))
+        paste_button.pack(pady=(0, 10), padx=10, fill="x") # Adjusted padding
 
         route_toggle = tk.Checkbutton(sidebar, text="Show Routes", variable=self.show_routes_var,
                                       command=self.toggle_routes, bg="#2c3e50", fg="white",
@@ -103,7 +107,7 @@ class PIViewerApp(tk.Tk):
         info_title.pack(pady=(10, 5), anchor='nw', padx=10)
         # --- Updated default text ---
         self.info_content_label = tk.Label(self.info_panel,
-                                           text="Load a PI JSON file or select a template.\n\n"
+                                           text="Load a PI JSON file, paste JSON, or select a template.\n\n" # Added paste option
                                                 "Click on a pin (marker) or a route (curved arrow) "
                                                 "in the plot to see details here.",
                                            bg="#eeeeee", justify=tk.LEFT, wraplength=230)
@@ -155,6 +159,53 @@ class PIViewerApp(tk.Tk):
             self.process_file(path)
         else:
             logging.info("File dialog cancelled.")
+
+    def paste_json_from_dialog(self):
+        """Opens a dialog to paste JSON data and processes it."""
+        dialog = tk.Toplevel(self)
+        dialog.title("Paste PI JSON Data")
+        dialog.geometry("500x400")
+        dialog.grab_set() # Make modal
+
+        tk.Label(dialog, text="Paste the exported PI JSON string below:").pack(pady=(10, 5), padx=10, anchor='w')
+
+        text_area = scrolledtext.ScrolledText(dialog, wrap=tk.WORD, height=15, width=60)
+        text_area.pack(pady=5, padx=10, fill="both", expand=True)
+        text_area.focus_set()
+
+        button_frame = tk.Frame(dialog)
+        button_frame.pack(pady=10, fill='x', padx=10)
+
+        result = {"json_string": None} # Dictionary to store result
+
+        def on_ok():
+            json_string = text_area.get("1.0", tk.END).strip()
+            if not json_string:
+                messagebox.showwarning("Empty Input", "Please paste the JSON data.", parent=dialog)
+                return
+            result["json_string"] = json_string
+            dialog.destroy()
+
+        def on_cancel():
+            dialog.destroy()
+
+        ok_button = tk.Button(button_frame, text="Process", command=on_ok, bg="#1abc9c", fg="white", relief=tk.FLAT)
+        ok_button.pack(side="right", padx=(5, 0))
+
+        cancel_button = tk.Button(button_frame, text="Cancel", command=on_cancel, bg="#bdc3c7", fg="white", relief=tk.FLAT)
+        cancel_button.pack(side="right")
+
+        dialog.wait_window() # Wait for dialog to close
+
+        # Process the result after the dialog is closed
+        if result["json_string"]:
+            logging.info("JSON string received from paste dialog.")
+            self.listbox.selection_clear(0, tk.END) # Clear template selection
+            self.current_file_path = None # Pasted data doesn't have a file path
+            self.process_json_string(result["json_string"])
+        else:
+            logging.info("Paste JSON dialog cancelled or no input provided.")
+
 
     def on_template_select(self, event):
         """Handles selection changes in the template listbox."""
@@ -233,10 +284,41 @@ class PIViewerApp(tk.Tk):
             self.clear_plot_and_state()
             return
 
-        self.update_status(f"Parsing data from {file_basename}...")
+        # --- Common Processing Logic ---
+        self._process_raw_data(raw_data, f"file '{file_basename}'")
+
+    def process_json_string(self, json_string):
+        """Parses and renders PI data from a JSON string."""
+        logging.info("--- Starting process_json_string ---")
+        self.update_status("Loading PI data from pasted JSON...")
+        self.current_file_path = None # No file path for pasted data
+
+        try:
+            raw_data = json.loads(json_string)
+            logging.info("Successfully parsed JSON string.")
+        except json.JSONDecodeError as e:
+            messagebox.showerror("Error", f"Invalid JSON format in pasted data:\n{e}")
+            self.update_status("Error: Invalid JSON in pasted data")
+            logging.error(f"Invalid JSON in pasted string: {e}")
+            self.clear_plot_and_state()
+            return
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to process pasted data: {e}")
+            self.update_status("Error: Failed to process pasted data")
+            logging.exception("Error processing pasted JSON string")
+            self.clear_plot_and_state()
+            return
+
+        # --- Common Processing Logic ---
+        self._process_raw_data(raw_data, "pasted JSON")
+
+    def _process_raw_data(self, raw_data, source_description):
+        """Shared logic to parse data, render plot, and handle unknowns."""
+        logging.info(f"Processing raw data from {source_description}")
+        self.update_status(f"Parsing data from {source_description}...")
         try:
             if not self.config_data:
-                 logging.error("Configuration data is not loaded during process_file.")
+                 logging.error("Configuration data is not loaded during _process_raw_data.")
                  raise ValueError("Configuration data is not loaded.") # Should not happen
 
             parsed = parse_pi_json(raw_data, self.config_data)
@@ -244,17 +326,16 @@ class PIViewerApp(tk.Tk):
                  raise ValueError("Parsing failed critically (check logs).")
 
             self.last_parsed = parsed # Store parsed data
-            logging.info(f"Successfully parsed data for {file_basename}")
+            logging.info(f"Successfully parsed data from {source_description}")
 
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to parse data from {file_basename}: {e}")
-            self.update_status(f"Error: Failed parsing {file_basename}")
-            logging.exception(f"Error parsing file {path}")
+            messagebox.showerror("Error", f"Failed to parse data from {source_description}: {e}")
+            self.update_status(f"Error: Failed parsing {source_description}")
+            logging.exception(f"Error parsing data from {source_description}")
             self.clear_plot_and_state()
             return
 
         # --- Render Plot FIRST ---
-        # Render the plot even if there are unknowns. They will show as "Unknown".
         logging.info("Calling refresh_plot (initial render before potential ID resolution).")
         self.refresh_plot() # This now uses self.last_parsed
 
@@ -291,25 +372,66 @@ class PIViewerApp(tk.Tk):
             )
 
         if resolution_needed:
-            self.update_status(f"Plot rendered. Resolve unknown IDs for {file_basename}.")
-            logging.info(f"Unknown IDs found for {file_basename}. Resolution dialogs triggered.")
+            self.update_status(f"Plot rendered. Resolve unknown IDs for {source_description}.")
+            logging.info(f"Unknown IDs found for {source_description}. Resolution dialogs triggered.")
         else:
-            self.update_status(f"Plot rendered successfully for {file_basename}.")
-            logging.info(f"Plot rendered successfully for {file_basename} (no unknown IDs found).")
+            self.update_status(f"Plot rendered successfully for {source_description}.")
+            logging.info(f"Plot rendered successfully for {source_description} (no unknown IDs found).")
 
-        logging.info(f"--- Finished process_file for {file_basename} ---")
+        logging.info(f"--- Finished processing data from {source_description} ---")
+
 
     def refresh_plot_after_resolve(self):
-        """Callback after ID resolution. Re-parses the current file and re-renders."""
+        """Callback after ID resolution. Re-parses the current data (file or stored string) and re-renders."""
         self.update_status("IDs resolved. Re-parsing and refreshing plot...")
         logging.info("--- Starting refresh_plot_after_resolve ---")
-        if self.current_file_path and self.config_data and os.path.exists(self.current_file_path):
-            file_basename = os.path.basename(self.current_file_path)
-            logging.info(f"Re-processing file: {file_basename}")
+
+        raw_data = None
+        source_description = "unknown source"
+
+        # Determine where the original data came from
+        if self.current_file_path and os.path.exists(self.current_file_path):
+            source_description = f"file '{os.path.basename(self.current_file_path)}'"
+            logging.info(f"Re-processing {source_description}")
             try:
-                # Re-read and re-parse the *original* data with the *updated* config
                 with open(self.current_file_path, 'r') as f:
                     raw_data = json.load(f)
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to re-read file {source_description} after ID resolution: {e}")
+                self.update_status(f"Error: Failed re-reading {source_description}")
+                logging.exception(f"Error re-reading file {self.current_file_path} after ID resolution")
+                self.clear_plot_and_state()
+                return
+        elif self.last_parsed: # If no file path, assume data came from paste (last_parsed should hold the structure)
+             # We need the *original* structure before parsing, which we didn't store.
+             # Workaround: Re-parse using the *already parsed* data (less ideal, but avoids storing large strings)
+             # This assumes parse_pi_json can handle its own output format if needed, which it should.
+             # A better approach would be to store the raw_data dict from paste if needed for re-parsing.
+             # For now, let's re-parse the existing self.last_parsed structure (which isn't the raw JSON).
+             # --> Correction: We MUST re-parse the ORIGINAL raw data. Let's try re-parsing self.last_parsed
+             # --> NO, that's wrong. We need the original structure.
+             # --> Let's stick to re-parsing the file if path exists. If no path, we can't reliably re-parse
+             # --> unless we stored the original pasted string/dict.
+             # --> Decision: Only support re-parsing from file for now. If data was pasted,
+             # --> the user would need to paste again after resolving IDs (or save/load).
+             # --> Let's refine the logic to only attempt re-parse if current_file_path is valid.
+             errmsg = "Cannot refresh plot after resolving IDs for pasted data. Please paste the data again or load from a file."
+             messagebox.showwarning("Refresh Limitation", errmsg, parent=self)
+             self.update_status("Cannot refresh pasted data after ID resolution.")
+             logging.warning(errmsg)
+             # Don't clear state, just leave the old plot.
+             return
+
+        else: # No file path and no last_parsed data - should not happen if resolve was triggered
+            errmsg = "Cannot refresh: Missing file path and parsed data after ID resolution."
+            self.update_status(errmsg)
+            logging.warning(errmsg)
+            self.clear_plot_and_state()
+            return
+
+        # If we have raw_data (must be from file)
+        if raw_data:
+            try:
                 logging.info("Re-parsing data with updated config...")
                 self.last_parsed = parse_pi_json(raw_data, self.config_data) # Update parsed data
 
@@ -318,19 +440,17 @@ class PIViewerApp(tk.Tk):
 
                 logging.info("Re-parsing complete. Calling refresh_plot.")
                 self.refresh_plot() # Re-render using the new self.last_parsed
-                self.update_status(f"Plot refreshed with resolved IDs for {file_basename}.")
-                logging.info(f"Plot refreshed successfully after ID resolution for {file_basename}.")
+                self.update_status(f"Plot refreshed with resolved IDs for {source_description}.")
+                logging.info(f"Plot refreshed successfully after ID resolution for {source_description}.")
             except Exception as e:
-                 messagebox.showerror("Error", f"Failed to re-process file after ID resolution: {e}")
-                 self.update_status(f"Error: Failed re-processing {file_basename}")
-                 logging.exception(f"Error re-processing file {self.current_file_path} after ID resolution")
+                 messagebox.showerror("Error", f"Failed to re-process data after ID resolution: {e}")
+                 self.update_status(f"Error: Failed re-processing {source_description}")
+                 logging.exception(f"Error re-processing data from {source_description} after ID resolution")
                  self.clear_plot_and_state()
-        else:
-            errmsg = "Cannot refresh: Missing or invalid file path, or config data after ID resolution."
-            self.update_status(errmsg)
-            logging.warning(errmsg)
-            self.clear_plot_and_state()
+        # else: # Handled by the checks above
+
         logging.info("--- Finished refresh_plot_after_resolve ---")
+
 
     def refresh_plot(self):
         """Renders the plot based on self.last_parsed and current settings."""
@@ -338,22 +458,13 @@ class PIViewerApp(tk.Tk):
         if self.last_parsed:
             logging.info("Rendering plot based on self.last_parsed data.")
             try:
-                # Clear previous plot widgets (render function does this now)
-                # logging.debug("Clearing previous plot widgets.")
-                # for widget in self.plot_frame.winfo_children():
-                #     widget.destroy()
-
-                # Reset info panel handled within render function now
-                # logging.debug("Resetting info panel to default.")
-                # self._setup_info_panel_default()
-
                 # Render the plot, passing the info_panel and route visibility state
                 show_routes_state = self.show_routes_var.get()
                 logging.debug(f"Calling render_matplotlib_plot with show_routes={show_routes_state}.")
                 render_matplotlib_plot(self.last_parsed, self.config_data, self.plot_frame,
                                        self.info_panel, show_routes=show_routes_state)
                 logging.debug("render_matplotlib_plot finished.")
-                # Status is usually updated by the caller (process_file, refresh_plot_after_resolve, toggle_routes)
+                # Status is usually updated by the caller
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to render plot: {e}")
                 self.update_status("Error: Failed to render plot.")
@@ -370,7 +481,7 @@ class PIViewerApp(tk.Tk):
         logging.info("Clearing plot area display and resetting info panel.")
         for widget in self.plot_frame.winfo_children():
             widget.destroy()
-        tk.Label(self.plot_frame, text="Load a file or select a template.", bg="#ffffff").pack(expand=True)
+        tk.Label(self.plot_frame, text="Load a file, paste JSON, or select a template.", bg="#ffffff").pack(expand=True) # Updated text
         self._setup_info_panel_default() # Reset info panel
 
     def clear_plot_and_state(self):
@@ -404,4 +515,3 @@ if __name__ == "__main__":
     app = PIViewerApp()
     app.mainloop()
     logging.info("--- PI Viewer Application finished ---")
-
