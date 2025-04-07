@@ -29,6 +29,9 @@ class PIViewerApp(tk.Tk):
         self.current_file_path = None   # Path to the currently loaded JSON file
         self.config_data = None         # Holds the Config object
         self.show_routes_var = tk.BooleanVar(value=True) # Controls route visibility
+        self.show_labels_var = tk.BooleanVar(value=True) # Controls label visibility
+        self.current_canvas = None      # Holds the current Matplotlib canvas object
+        self.current_label_artists = [] # Holds the label artists for toggling
 
         # --- Load Configuration ---
         try:
@@ -75,15 +78,25 @@ class PIViewerApp(tk.Tk):
         load_button = tk.Button(sidebar, text="Load File...", command=self.load_file_from_dialog, bg="#1abc9c", fg="white", relief=tk.FLAT, font=("Segoe UI", 10))
         load_button.pack(pady=(10, 5), padx=10, fill="x") # Adjusted padding
 
-        # --- Add Paste Button ---
         paste_button = tk.Button(sidebar, text="Paste JSON...", command=self.paste_json_from_dialog, bg="#3498db", fg="white", relief=tk.FLAT, font=("Segoe UI", 10))
-        paste_button.pack(pady=(0, 10), padx=10, fill="x") # Adjusted padding
+        paste_button.pack(pady=(0, 5), padx=10, fill="x") # Adjusted padding
 
-        route_toggle = tk.Checkbutton(sidebar, text="Show Routes", variable=self.show_routes_var,
+        # --- Toggles Frame ---
+        toggle_frame = tk.Frame(sidebar, bg="#2c3e50")
+        toggle_frame.pack(pady=(5, 10), padx=10, fill='x')
+
+        route_toggle = tk.Checkbutton(toggle_frame, text="Show Routes", variable=self.show_routes_var,
                                       command=self.toggle_routes, bg="#2c3e50", fg="white",
                                       selectcolor="#34495e", activebackground="#2c3e50",
                                       activeforeground="white", font=("Segoe UI", 10), anchor='w')
-        route_toggle.pack(pady=(0, 10), padx=10, fill='x')
+        route_toggle.pack(side=tk.TOP, fill='x')
+
+        label_toggle = tk.Checkbutton(toggle_frame, text="Show Labels", variable=self.show_labels_var,
+                                      command=self.toggle_labels, bg="#2c3e50", fg="white",
+                                      selectcolor="#34495e", activebackground="#2c3e50",
+                                      activeforeground="white", font=("Segoe UI", 10), anchor='w')
+        label_toggle.pack(side=tk.TOP, fill='x')
+
 
         template_label = tk.Label(sidebar, text="Templates", bg="#2c3e50", fg="white", font=("Segoe UI", 12, "bold"))
         template_label.pack(pady=(5, 5))
@@ -105,9 +118,8 @@ class PIViewerApp(tk.Tk):
             widget.destroy() # Clear everything first
         info_title = tk.Label(self.info_panel, text="Info Panel", bg="#eeeeee", font=("Segoe UI", 12, "bold"))
         info_title.pack(pady=(10, 5), anchor='nw', padx=10)
-        # --- Updated default text ---
         self.info_content_label = tk.Label(self.info_panel,
-                                           text="Load a PI JSON file, paste JSON, or select a template.\n\n" # Added paste option
+                                           text="Load a PI JSON file, paste JSON, or select a template.\n\n"
                                                 "Click on a pin (marker) or a route (curved arrow) "
                                                 "in the plot to see details here.",
                                            bg="#eeeeee", justify=tk.LEFT, wraplength=230)
@@ -337,32 +349,41 @@ class PIViewerApp(tk.Tk):
 
         # --- Render Plot FIRST ---
         logging.info("Calling refresh_plot (initial render before potential ID resolution).")
-        self.refresh_plot() # This now uses self.last_parsed
+        self.refresh_plot() # This now uses self.last_parsed and current toggle states
 
         # --- Check for and Resolve Unknowns AFTER rendering initial plot ---
-        unknown_commodities = list(parsed["unknowns"]["commodity"])
-        unknown_pin_types = list(parsed["unknowns"]["pin_type"])
+        # Ensure unknowns exist before accessing keys
+        unknowns = parsed.get("unknowns", {})
+        unknown_commodities = list(unknowns.get("commodity", []))
+        unknown_pin_types = list(unknowns.get("pin_type", []))
         current_planet_id = parsed.get("planet_id") # Get planet_id from parser result
         logging.info(f"Planet ID from JSON parser: {current_planet_id}")
 
         resolution_needed = False
+        # Check commodities first
         if unknown_commodities:
             resolution_needed = True
             logging.info(f"Resolving unknown commodities: {unknown_commodities}")
+            # Ensure commodities key exists in config data before accessing values
+            known_commodity_values = list(self.config_data.data.get("commodities", {}).values())
             resolve_unknown_ids(
                 unknown_ids=unknown_commodities, id_type="commodity",
-                known_options=list(self.config_data.data.get("commodities", {}).values()),
+                known_options=known_commodity_values,
                 config=self.config_data, update_callback=self.refresh_plot_after_resolve,
                 planet_id=None # Not needed for commodities
             )
-        if unknown_pin_types:
+        # Check pin types only *after* commodities are potentially resolved (if needed)
+        # Re-check unknowns in case config was updated but not re-parsed yet
+        # (refresh_plot_after_resolve handles the re-parse)
+        if unknown_pin_types and not unknown_commodities: # Only pop pin type dialog if no commodity dialog was shown
             resolution_needed = True
             logging.info(f"Resolving unknown pin types: {unknown_pin_types}")
             # Provide known categories + any existing from config as suggestions
+            pin_type_values = self.config_data.data.get("pin_types", {}).values()
             known_categories = list(set(
                 ["Extractor", "Launchpad", "Basic Industrial Facility", "Advanced Industrial Facility",
                  "High-Tech Industrial Facility", "Storage Facility", "Command Center"] +
-                [v.get('category', 'Unknown') for v in self.config_data.data.get("pin_types", {}).values()]
+                [v.get('category', 'Unknown') for v in pin_type_values]
             ))
             resolve_unknown_ids(
                 unknown_ids=unknown_pin_types, id_type="pin_type",
@@ -370,8 +391,15 @@ class PIViewerApp(tk.Tk):
                 config=self.config_data, update_callback=self.refresh_plot_after_resolve,
                 planet_id=current_planet_id # Pass the planet ID
             )
+        elif unknown_pin_types and unknown_commodities:
+             logging.info("Unknown pin types also found, but will be handled after commodity resolution triggers a refresh.")
+             # Don't trigger the pin_type dialog immediately, let the commodity resolution callback handle the refresh,
+             # which will then re-evaluate unknowns.
 
-        if resolution_needed:
+        if resolution_needed and not unknown_commodities and not unknown_pin_types:
+             # This case means resolution happened, but the refresh callback handles the status.
+             pass
+        elif resolution_needed:
             self.update_status(f"Plot rendered. Resolve unknown IDs for {source_description}.")
             logging.info(f"Unknown IDs found for {source_description}. Resolution dialogs triggered.")
         else:
@@ -402,25 +430,47 @@ class PIViewerApp(tk.Tk):
                 logging.exception(f"Error re-reading file {self.current_file_path} after ID resolution")
                 self.clear_plot_and_state()
                 return
-        elif self.last_parsed: # If no file path, assume data came from paste (last_parsed should hold the structure)
-             # We need the *original* structure before parsing, which we didn't store.
-             # Workaround: Re-parse using the *already parsed* data (less ideal, but avoids storing large strings)
-             # This assumes parse_pi_json can handle its own output format if needed, which it should.
-             # A better approach would be to store the raw_data dict from paste if needed for re-parsing.
-             # For now, let's re-parse the existing self.last_parsed structure (which isn't the raw JSON).
-             # --> Correction: We MUST re-parse the ORIGINAL raw data. Let's try re-parsing self.last_parsed
-             # --> NO, that's wrong. We need the original structure.
-             # --> Let's stick to re-parsing the file if path exists. If no path, we can't reliably re-parse
-             # --> unless we stored the original pasted string/dict.
-             # --> Decision: Only support re-parsing from file for now. If data was pasted,
-             # --> the user would need to paste again after resolving IDs (or save/load).
-             # --> Let's refine the logic to only attempt re-parse if current_file_path is valid.
-             errmsg = "Cannot refresh plot after resolving IDs for pasted data. Please paste the data again or load from a file."
-             messagebox.showwarning("Refresh Limitation", errmsg, parent=self)
-             self.update_status("Cannot refresh pasted data after ID resolution.")
-             logging.warning(errmsg)
-             # Don't clear state, just leave the old plot.
-             return
+        elif self.last_parsed: # If no file path, assume data came from paste
+             # Limitation: Cannot reliably re-parse pasted data without storing the original string/dict.
+             # We will re-process the *newly parsed* data after resolving IDs, which might miss some nuances
+             # if the parser itself needs re-running on the *original* raw data.
+             # For now, proceed by re-parsing the current self.last_parsed data to check for remaining unknowns
+             # and then re-render. This is better than doing nothing.
+             logging.warning("Re-processing pasted data after ID resolution. Re-parsing current structure, not original JSON.")
+             source_description = "pasted JSON"
+             # Re-parse the *existing parsed data* with the updated config to catch remaining unknowns
+             # This isn't ideal but the best we can do without storing the original paste.
+             try:
+                 logging.info("Re-parsing existing parsed structure with updated config...")
+                 re_parsed_check = parse_pi_json(self.last_parsed, self.config_data) # Use the current parsed data as input
+                 if re_parsed_check is None:
+                     raise ValueError("Re-parsing check failed critically after ID resolution.")
+                 self.last_parsed = re_parsed_check # Update with potentially newly resolved names
+                 logging.info("Re-parsing check complete.")
+                 # Now check for remaining unknowns after this re-parse
+                 unknowns = self.last_parsed.get("unknowns", {})
+                 remaining_commodities = unknowns.get("commodity", [])
+                 remaining_pin_types = unknowns.get("pin_type", [])
+
+                 if remaining_commodities or remaining_pin_types:
+                      logging.warning(f"Remaining unknowns after re-parse check: C={remaining_commodities}, P={remaining_pin_types}. Triggering resolution again.")
+                      # Trigger the processing again to handle remaining unknowns
+                      # This might lead to nested calls if not careful, but _process_raw_data handles sequential checks.
+                      self._process_raw_data(self.last_parsed, source_description + " (re-check)") # Use the re-parsed data
+                      return # Exit here, _process_raw_data will handle rendering/status
+                 else:
+                      # No remaining unknowns after re-parse check, just refresh the plot
+                      logging.info("No remaining unknowns found after re-parse check. Refreshing plot.")
+                      self.refresh_plot()
+                      self.update_status(f"Plot refreshed with resolved IDs for {source_description}.")
+                      logging.info(f"Plot refreshed successfully after ID resolution for {source_description}.")
+
+             except Exception as e:
+                 messagebox.showerror("Error", f"Failed to re-process pasted data after ID resolution: {e}")
+                 self.update_status(f"Error: Failed re-processing {source_description}")
+                 logging.exception(f"Error re-processing pasted data from {source_description} after ID resolution")
+                 self.clear_plot_and_state()
+             return # Exit after handling pasted data
 
         else: # No file path and no last_parsed data - should not happen if resolve was triggered
             errmsg = "Cannot refresh: Missing file path and parsed data after ID resolution."
@@ -433,15 +483,42 @@ class PIViewerApp(tk.Tk):
         if raw_data:
             try:
                 logging.info("Re-parsing data with updated config...")
-                self.last_parsed = parse_pi_json(raw_data, self.config_data) # Update parsed data
+                parsed = parse_pi_json(raw_data, self.config_data) # Re-parse from original file data
 
-                if self.last_parsed is None:
+                if parsed is None:
                     raise ValueError("Re-parsing failed critically after ID resolution.")
 
-                logging.info("Re-parsing complete. Calling refresh_plot.")
-                self.refresh_plot() # Re-render using the new self.last_parsed
-                self.update_status(f"Plot refreshed with resolved IDs for {source_description}.")
-                logging.info(f"Plot refreshed successfully after ID resolution for {source_description}.")
+                self.last_parsed = parsed # Update parsed data
+
+                logging.info("Re-parsing complete. Checking for remaining unknowns...")
+                # Check for remaining unknowns *again* after re-parsing the original file data
+                unknowns = self.last_parsed.get("unknowns", {})
+                remaining_commodities = unknowns.get("commodity", [])
+                remaining_pin_types = unknowns.get("pin_type", [])
+                current_planet_id = self.last_parsed.get("planet_id")
+
+                if remaining_commodities:
+                    logging.info(f"Still unknown commodities after re-parse: {remaining_commodities}. Triggering resolution again.")
+                    known_commodity_values = list(self.config_data.data.get("commodities", {}).values())
+                    resolve_unknown_ids(remaining_commodities, "commodity", known_commodity_values, self.config_data, self.refresh_plot_after_resolve, None)
+                    # Don't refresh plot yet, let the next callback handle it
+                elif remaining_pin_types:
+                     logging.info(f"Still unknown pin types after re-parse: {remaining_pin_types}. Triggering resolution again.")
+                     pin_type_values = self.config_data.data.get("pin_types", {}).values()
+                     known_categories = list(set(
+                         ["Extractor", "Launchpad", "Basic Industrial Facility", "Advanced Industrial Facility",
+                          "High-Tech Industrial Facility", "Storage Facility", "Command Center"] +
+                         [v.get('category', 'Unknown') for v in pin_type_values]
+                     ))
+                     resolve_unknown_ids(remaining_pin_types, "pin_type", known_categories, self.config_data, self.refresh_plot_after_resolve, current_planet_id)
+                     # Don't refresh plot yet
+                else:
+                     # No remaining unknowns, finally refresh the plot
+                     logging.info("No remaining unknowns after re-parse. Calling refresh_plot.")
+                     self.refresh_plot() # Re-render using the new self.last_parsed
+                     self.update_status(f"Plot refreshed with resolved IDs for {source_description}.")
+                     logging.info(f"Plot refreshed successfully after ID resolution for {source_description}.")
+
             except Exception as e:
                  messagebox.showerror("Error", f"Failed to re-process data after ID resolution: {e}")
                  self.update_status(f"Error: Failed re-processing {source_description}")
@@ -458,13 +535,22 @@ class PIViewerApp(tk.Tk):
         if self.last_parsed:
             logging.info("Rendering plot based on self.last_parsed data.")
             try:
-                # Render the plot, passing the info_panel and route visibility state
+                # Get current toggle states
                 show_routes_state = self.show_routes_var.get()
-                logging.debug(f"Calling render_matplotlib_plot with show_routes={show_routes_state}.")
-                render_matplotlib_plot(self.last_parsed, self.config_data, self.plot_frame,
-                                       self.info_panel, show_routes=show_routes_state)
+                show_labels_state = self.show_labels_var.get()
+                logging.debug(f"Calling render_matplotlib_plot with show_routes={show_routes_state}, show_labels={show_labels_state}.")
+
+                # Render the plot, passing toggle states and getting back canvas/labels
+                canvas, label_artists = render_matplotlib_plot(
+                    self.last_parsed, self.config_data, self.plot_frame,
+                    self.info_panel, show_routes=show_routes_state, show_labels=show_labels_state
+                )
+                # Store canvas and labels for toggling later
+                self.current_canvas = canvas
+                self.current_label_artists = label_artists if label_artists else []
+
                 logging.debug("render_matplotlib_plot finished.")
-                # Status is usually updated by the caller
+                # Status is usually updated by the caller (_process_raw_data or refresh_plot_after_resolve)
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to render plot: {e}")
                 self.update_status("Error: Failed to render plot.")
@@ -483,6 +569,8 @@ class PIViewerApp(tk.Tk):
             widget.destroy()
         tk.Label(self.plot_frame, text="Load a file, paste JSON, or select a template.", bg="#ffffff").pack(expand=True) # Updated text
         self._setup_info_panel_default() # Reset info panel
+        self.current_canvas = None
+        self.current_label_artists = []
 
     def clear_plot_and_state(self):
         """Clears plot, resets info panel, and clears internal parsed data state."""
@@ -495,19 +583,49 @@ class PIViewerApp(tk.Tk):
 
 
     def toggle_routes(self):
-        """Handles the 'Show Routes' checkbox toggle."""
+        """Handles the 'Show Routes' checkbox toggle by re-rendering."""
         route_state = self.show_routes_var.get()
         state_text = 'shown' if route_state else 'hidden'
-        logging.info(f"Route visibility toggled to: {route_state}")
+        logging.info(f"Route visibility toggled to: {route_state}. Refreshing plot.")
         self.update_status(f"Routes {state_text}. Refreshing plot...")
 
         # Re-render the plot with the new setting IF data exists
         if self.last_parsed:
-            self.refresh_plot()
+            self.refresh_plot() # refresh_plot now reads the latest toggle states
             self.update_status(f"Plot refreshed. Routes are {state_text}.")
         else:
             logging.warning("Toggle routes called but no data loaded.")
             self.update_status("Load data to toggle route visibility.")
+
+    def toggle_labels(self):
+        """Handles the 'Show Labels' checkbox toggle without full re-render."""
+        label_state = self.show_labels_var.get()
+        state_text = 'shown' if label_state else 'hidden'
+        logging.info(f"Label visibility toggled to: {label_state}")
+
+        if self.current_canvas and self.current_label_artists:
+            self.update_status(f"Labels {state_text}. Updating display...")
+            try:
+                for label in self.current_label_artists:
+                    label.set_visible(label_state)
+                self.current_canvas.draw_idle() # Redraw efficiently
+                self.update_status(f"Plot updated. Labels are {state_text}.")
+            except Exception as e:
+                 logging.exception("Error toggling label visibility")
+                 self.update_status(f"Error updating labels to {state_text}. Re-rendering...")
+                 # Fallback to full refresh on error
+                 self.refresh_plot()
+
+        elif self.last_parsed:
+             # Data exists, but canvas/labels aren't stored (shouldn't happen often)
+             # Do a full refresh
+             logging.warning("Toggle labels called, data exists but no canvas/artists. Performing full refresh.")
+             self.update_status(f"Labels {state_text}. Refreshing plot...")
+             self.refresh_plot()
+             self.update_status(f"Plot refreshed. Labels are {state_text}.")
+        else:
+             logging.warning("Toggle labels called but no data loaded.")
+             self.update_status("Load data to toggle label visibility.")
 
 
 if __name__ == "__main__":

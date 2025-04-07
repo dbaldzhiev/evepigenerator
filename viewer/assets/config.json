@@ -6,6 +6,7 @@
     "17392": "Data Chips",
     "17898": "High-tech Transmitters",
     "2267": "Base Metals",
+    "2306": "Non-CS Crystals",
     "2312": "Supertensile Plastics",
     "2317": "Oxides",
     "2319": "Test Cultures",
@@ -89,6 +90,10 @@
       "category": "Advanced Industrial Facility",
       "planet": "Temperate"
     },
+    "2481": {
+      "category": "Basic Industrial Facility",
+      "planet": "Temperate"
+    },
     "2482": {
       "category": "High-Tech Industrial Facility",
       "planet": "Temperate"
@@ -120,10 +125,15 @@
     "2848": {
       "category": "Extractor",
       "planet": "Barren"
+    },
+    "3068": {
+      "category": "Extractor",
+      "planet": "Temperate"
     }
   },
   "planet_types": {
     "0": "Unknown",
+    "11": "Temperate",
     "2015": "Lava",
     "2016": "Barren"
   }
