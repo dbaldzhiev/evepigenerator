@@ -141,7 +141,9 @@ def parse_pi_json(data, config):
         path = route_raw.get("P") # Path is less reliable, prefer S/D
         source_idx_1based = route_raw.get("S") # Use direct S if available
         dest_idx_1based = route_raw.get("D")   # Use direct D if available
-        commodity_id = route_raw.get("Typ") # Use 'Typ' for route commodity ID
+        # --- FIX: Use "T" instead of "Typ" for commodity ID ---
+        commodity_id = route_raw.get("T") # Use 'T' for route commodity ID
+        # --- END FIX ---
         quantity = route_raw.get("Qty", 0) # Use 'Qty' for quantity
 
         # --- Source/Destination Pin Index Resolution ---
@@ -149,7 +151,7 @@ def parse_pi_json(data, config):
         if source_idx_1based is None:
             if isinstance(path, list) and len(path) > 0:
                 source_idx_1based = path[0]
-                logging.warning(f"Route {i+1}: Missing 'S', using first element of 'P' ({source_idx_1based}) as source.")
+                logging.debug(f"Route {i+1}: Missing 'S', using first element of 'P' ({source_idx_1based}) as source.") # Changed to debug
             else:
                 logging.error(f"Route {i + 1}: Critical - Missing source pin index ('S' and invalid/missing 'P'). Skipping route. Data: {route_raw}")
                 continue # Cannot proceed without a source
@@ -157,29 +159,32 @@ def parse_pi_json(data, config):
         if dest_idx_1based is None:
             if isinstance(path, list) and len(path) > 1:
                  dest_idx_1based = path[-1]
-                 logging.warning(f"Route {i+1}: Missing 'D', using last element of 'P' ({dest_idx_1based}) as destination.")
+                 logging.debug(f"Route {i+1}: Missing 'D', using last element of 'P' ({dest_idx_1based}) as destination.") # Changed to debug
             else:
                  logging.error(f"Route {i + 1}: Critical - Missing destination pin index ('D' and invalid/missing 'P'). Skipping route. Data: {route_raw}")
                  continue # Cannot proceed without a destination
 
         # --- Commodity ID Resolution ---
         if commodity_id is None:
-            # Attempt inference based on source pin's schematic output if 'Typ' is missing
+            # Attempt inference based on source pin's schematic output if 'T' is missing
+            logging.warning(f"Route {i + 1}: Missing commodity type 'T'. Attempting inference from source pin {source_idx_1based}.")
             source_pin_0_idx = pin_index_map.get(source_idx_1based)
             if source_pin_0_idx is not None and source_pin_0_idx < len(parsed_pins):
                 source_pin_data = parsed_pins[source_pin_0_idx]
                 inferred_commodity_id = source_pin_data.get("schematic_id")
                 if inferred_commodity_id is not None:
                     commodity_id = inferred_commodity_id
-                    logging.warning(f"Route {i + 1}: Missing commodity type 'Typ'. Inferred commodity ID {commodity_id} from source pin {source_idx_1based}'s schematic.")
+                    logging.info(f"Route {i + 1}: Successfully inferred commodity ID {commodity_id} from source pin {source_idx_1based}'s schematic.") # Changed to info
                 else:
                     # Source pin exists but has no schematic_id (e.g., extractor, storage)
-                    logging.warning(f"Route {i + 1}: Missing commodity type 'Typ'. Source pin {source_idx_1based} ({source_pin_data.get('category')}) has no schematic_id. Cannot infer type. Skipping route.")
+                    logging.warning(f"Route {i + 1}: Missing commodity type 'T'. Source pin {source_idx_1based} ({source_pin_data.get('category')}) has no schematic_id. Cannot infer type. Skipping route.")
                     continue
             else:
                 # Source pin index itself is invalid (shouldn't happen if S/D checks passed, but safety)
-                logging.warning(f"Route {i + 1}: Missing commodity type 'Typ' and source pin {source_idx_1based} could not be found in parsed pins. Skipping route.")
+                logging.warning(f"Route {i + 1}: Missing commodity type 'T' and source pin {source_idx_1based} could not be found in parsed pins. Skipping route.")
                 continue
+        # else: # Commodity ID was present in the raw data ('T' key)
+        #     logging.debug(f"Route {i+1}: Found commodity ID {commodity_id} directly from 'T' key.")
 
         logging.debug(f"  Processing Route: SourceIdx={source_idx_1based}, DestIdx={dest_idx_1based}, CommodityID={commodity_id}, Qty={quantity}")
 

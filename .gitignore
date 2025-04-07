@@ -3,4 +3,5 @@ viewer/__pycache__
 .venv/
 .vscode/
 templates/*
+templ/
 viewer/assets/backup/*
