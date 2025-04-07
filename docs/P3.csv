@@ -1,0 +1,22 @@
+P2 INPUT A						;P2 INPUT B						;P2 INPUT C							P3 RESULT
+Nanites							;Livestock						;Construction Blocks				;Biotech Research Reports
+Silicate glass					;Rocket Fuel					;-									;Camera Drones
+Oxides							;Coolant						;-									;Condensates
+Test Cultures					;Synthetic Oil					;Fertilizer							;Cryoprotectant Solution
+Supertensile Plastics			;Microfiber Shielding			;-									;Data Chips
+Oxides							;Biocells						;Superconductors					;Gel-Matrix Biopaste
+Water-Cooled CPU				;Transmitter					;-									;Guidance Systems
+Polytextiles					;Viral Agent					;Transmitter						;Hazmat Detection Systems
+Polyaramids						;Genetically Enhanced Livestock	;-									;Hermetic Membranes
+Polyaramids						;Transmitter					;-									;High-Tech Transmitters
+Fertilizer						;Polytextiles					;-									;Industrial Explosives
+Biocells						;Silicate Glass					;-									;Neocoms
+Microfiber Shielding			;Enriched Uranium				;-									;Nuclear Reactors
+Supertensile Plastics			;Mechanical Parts				;Miniature Electronics				;Planetary Vehicles
+Mechanical Parts				;Consumer Electronics			;-									;Robotics
+Construction Blocks				;Miniature Electronics			;-									;Smartfab Units
+Water-Cooled CPU				;Coolant						;Consumer Electronics				;Supercomputers
+Supertensile Plastics			;Test Cultures					;-									;Synthetic Synapses
+Biocells						;Nanites						;-									;Transcranial Microcontrollers
+Synthetic Oil					;Superconductors				;-									;Ukomi Superconductors
+Livestock						;Viral Agent					;-									;Vaccines

@@ -1,0 +1,86 @@
+{
+  "pin_types": {
+    "2552": {
+      "category": "Launchpad",
+      "planet": "Generic"
+    },
+    "2474": {
+      "category": "Advanced Factory",
+      "planet": "Generic"
+    },
+    "2254": {
+      "category": "Extractor",
+      "planet": "Generic"
+    },
+    "2469": {
+      "category": "Basic Factory",
+      "planet": "Lava"
+    },
+    "2555": {
+      "category": "Launchpad",
+      "planet": "Lava"
+    },
+    "2558": {
+      "category": "Storage",
+      "planet": "Lava"
+    },
+    "2544": {
+      "category": "Launchpad",
+      "planet": "Unknown"
+    },
+    "2473": {
+      "category": "Basic Factory",
+      "planet": "Unknown"
+    },
+    "2541": {
+      "category": "Storage",
+      "planet": "Unknown"
+    }
+  },
+  "schematics": {
+    "2329": {
+      "name": "Biocells",
+      "inputs": [
+        2345,
+        2346
+      ],
+      "output": 2329
+    },
+    "2400": {
+      "name": "Toxic Metals",
+      "inputs": [],
+      "output": 2400
+    },
+    "2401": {
+      "name": "Chiral Structures",
+      "inputs": [],
+      "output": 2401
+    },
+    "3683": {
+      "name": "Oxygen",
+      "inputs": [],
+      "output": 3683
+    },
+    "2393": {
+      "name": "Bacteria",
+      "inputs": [],
+      "output": 2393
+    },
+    "2396": {
+      "name": "Biofuels",
+      "inputs": [],
+      "output": 2396
+    },
+    "3645": {
+      "name": "Water",
+      "inputs": [],
+      "output": 3645
+    }
+  },
+  "commodities": {
+    "44": "Precursors",
+    "2396": "Biocells",
+    "2345": "Water",
+    "2346": "Electrolytes"
+  }
+}

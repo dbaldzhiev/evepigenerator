@@ -1,0 +1,25 @@
+P1 INPUT A						;P1 INPUT B						;P2 RESULT
+Precious Metals					;Biofuels						;Biocells
+Toxic Metals					;Reactive Metals				;Construction Blocks
+Chiral Structures				;Toxic Metals					;Consumer Electronics
+Water							;Electrolytes					;Coolant
+Toxic Metals					;Precious Metals				;Enriched Uranium
+Proteins						;Bacteria						;Fertilizer
+Biomass							;Proteins						;Genetically Enhanced Livestock
+Biofuels						;Proteins						;Livestock
+Precious Metals					;Reactive Metals				;Mechanical Parts
+Silicon							;Industrial Fibers				;Microfiber Shielding
+Silicon							;Chiral Structures				;Miniature Electronics
+Reactive Metals					;Bacteria						;Nanites
+Oxygen							;Oxidizing Compound				;Oxides
+Industrial Fibers				;Oxidizing Compound				;Polyaramids
+Industrial Fibers				;Biofuels						;Polytextiles
+Electrolytes					;Plasmoids						;Rocket Fuel
+Silicon							;Oxidizing Compound				;Silicate Glass
+Water							;Plasmoids						;Superconductors
+Biomass							;Oxygen							;Supertensile Plastics
+Oxygen							;Electrolytes					;Synthetic Oil
+Water							;Bacteria						;Test Cultures
+Chiral Structures				;Plasmoids						;Transmitter
+Biomass							;Bacteria						;Viral Agent
+Water							;Reactive Metals				;Water-Cooled CPU

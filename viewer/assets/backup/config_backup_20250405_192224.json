@@ -1,0 +1,23 @@
+{
+  "pin_types": {
+    "2552": { "category": "Launchpad", "planet": "Generic" },
+    "2474": { "category": "Advanced Factory", "planet": "Generic" },
+    "2254": { "category": "Extractor", "planet": "Generic" },
+    "2469": { "category": "Basic Factory", "planet": "Lava" },
+    "2555": { "category": "Launchpad", "planet": "Lava" },
+    "2558": { "category": "Storage", "planet": "Lava" }
+  },
+  "schematics": {
+    "2329": {
+      "name": "Biocells",
+      "inputs": [2345, 2346],
+      "output": 2329
+    }
+  },
+  "commodities": {
+    "44": "Precursors",
+    "2396": "Biocells",
+    "2345": "Water",
+    "2346": "Electrolytes"
+  }
+}
