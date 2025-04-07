@@ -2,15 +2,15 @@ import tkinter as tk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-from matplotlib.patches import FancyArrowPatch  # Added for improved curved arrow rendering
+from matplotlib.patches import FancyArrowPatch
 import matplotlib.path as mpath
 import logging
 import math
 
 # --- Define Pin Styles ---
 CATEGORY_STYLES = {
-    "Extractor": {"color": "#2ecc71", "marker": "X", "size": 12},  # Green X
-    "Launchpad": {"color": "#3498db", "marker": "^", "size": 12},    # Blue Triangle Up
+    "Extractor": {"color": "#cc2e70", "marker": "X", "size": 12},  # Green X
+    "Launchpad": {"color": "#00ff4c", "marker": "^", "size": 12},    # Blue Triangle Up
     "Basic Industrial Facility": {"color": "#f1c40f", "marker": "s", "size": 12},  # Yellow Square
     "Advanced Industrial Facility": {"color": "#e67e22", "marker": "p", "size": 12},  # Orange Pentagon
     "High-Tech Industrial Facility": {"color": "#e74c3c", "marker": "h", "size": 12},  # Red Hexagon
@@ -25,7 +25,10 @@ ROUTE_HIGHLIGHT_COLOR = "#2980b9"    # Darker blue for selected route
 LINK_COLOR = "#e74c3c"             # Red for links
 # --- End Updated Colors ---
 
-ARROW_STYLE = "Simple,tail_width=0.5,head_width=2,head_length=4"  # Style for arrowheads
+# Adjusted for thinner lines and smaller arrowheads
+ARROW_STYLE = "Simple,tail_width=0.3,head_width=1.5,head_length=3" # Thinner tail, smaller head
+ROUTE_LINE_WIDTH = 0.125 # Thinner base line width
+ROUTE_MUTATION_SCALE = 2 # Smaller arrowhead scale
 
 def _get_pin_style(pin_category):
     """Gets the marker style dictionary for a given pin category."""
@@ -45,24 +48,23 @@ def _get_pin_style(pin_category):
         return CATEGORY_STYLES["Command Center"]
     return CATEGORY_STYLES.get(pin_category, CATEGORY_STYLES["Unknown"])
 
-def render_matplotlib_plot(parsed, config, container_frame, info_panel=None):
+def render_matplotlib_plot(parsed, config, container_frame, info_panel=None, show_routes=True):
+    """Renders the PI layout plot.
+
+    Args:
+        parsed (dict): Parsed data from parse_pi_json.
+        config (Config): Configuration object.
+        container_frame (tk.Frame): The Tkinter frame to embed the plot in.
+        info_panel (tk.Frame, optional): The frame for displaying route info. Defaults to None.
+        show_routes (bool, optional): Whether to display route lines. Defaults to True.
+    """
     for widget in container_frame.winfo_children():
         widget.destroy()
 
     if not parsed or not parsed.get("pins"):
         tk.Label(container_frame, text="No data to display.", bg=container_frame.cget('bg')).pack(expand=True)
         if info_panel:
-            title_widget = None
-            for widget in info_panel.winfo_children():
-                if isinstance(widget, tk.Label) and widget.cget('text') == "Info Panel":
-                    title_widget = widget
-                    break
-            for widget in info_panel.winfo_children():
-                if widget != title_widget:
-                    widget.destroy()
-            if title_widget:
-                tk.Label(info_panel, text="Load a file or select a template.", bg=info_panel.cget('bg'),
-                         justify=tk.LEFT).pack(pady=5, padx=10, anchor="nw")
+            _reset_info_panel(info_panel) # Reset info panel even if no plot
         return
 
     fig, ax = plt.subplots(figsize=(10, 7), facecolor=container_frame.cget('bg'))
@@ -123,7 +125,10 @@ def render_matplotlib_plot(parsed, config, container_frame, info_panel=None):
             norm_x = -dy / dist
             norm_y = dx / dist
 
-            offset_scale = dist * 0.1
+            base_offset_scale = dist * 0.1
+            offset_variation = (i % 5) * 0.02
+            offset_scale = base_offset_scale * (1 + offset_variation)
+
             ctrl_x = mid_x + norm_x * offset_scale
             ctrl_y = mid_y + norm_y * offset_scale
 
@@ -136,19 +141,19 @@ def render_matplotlib_plot(parsed, config, container_frame, info_panel=None):
             codes, verts = zip(*path_data)
             path = Path(verts, codes)
 
-            # Use FancyArrowPatch to render a curved arrow with arrowhead
-            patch = FancyArrowPatch(path=path, arrowstyle=ARROW_STYLE, mutation_scale=1,
-                                    color=ROUTE_COLOR, lw=0.1, alpha=0.6, zorder=2)
-            patch.route_data = route  # Store route data for click events
-            patch.original_lw = 0.01
-            patch.original_color = ROUTE_COLOR
+            patch = FancyArrowPatch(path=path, arrowstyle=ARROW_STYLE, mutation_scale=ROUTE_MUTATION_SCALE,
+                                    edgecolor=ROUTE_COLOR, facecolor=ROUTE_COLOR,
+                                    lw=ROUTE_LINE_WIDTH, # Use defined thinner line width
+                                    alpha=0.7, zorder=2)
+            patch.route_data = route
+            patch.original_lw = ROUTE_LINE_WIDTH # Store original thinner width
+            patch.original_edgecolor = ROUTE_COLOR
+            patch.original_facecolor = ROUTE_COLOR
             patch.original_zorder = 2
+            patch.set_visible(show_routes) # Set visibility based on parameter
             ax.add_patch(patch)
             route_patches.append(patch)
-            
-            # Optionally, add a text label along the route for commodity and quantity
-            #label = f"{route.get('commodity_name', 'Unknown')} ({route.get('quantity', 0):,})"
-            #ax.text(ctrl_x, ctrl_y, label, fontsize=7, ha='center', va='center', color=ROUTE_COLOR, backgroundcolor='white', alpha=0.8, zorder=3)
+
         except KeyError as e:
             logging.warning(f"Skipping route due to missing pin index: {e}. Route data: {route}")
         except Exception as e:
@@ -156,8 +161,8 @@ def render_matplotlib_plot(parsed, config, container_frame, info_panel=None):
 
     ax.set_aspect('equal', adjustable='box')
     ax.invert_yaxis()
-    ax.invert_xaxis()  # PI layouts often have origin at top-left
-    ax.axis('off')  # Hide axes ticks and labels
+    ax.invert_xaxis()
+    ax.axis('off')
 
     # --- Add Title/Subtitle ---
     title_parts = []
@@ -168,9 +173,9 @@ def render_matplotlib_plot(parsed, config, container_frame, info_panel=None):
     main_title = " | ".join(title_parts)
     sub_title = parsed.get("comment", "")
 
-    ax.set_title(main_title, fontsize=12, pad=50)
+    ax.set_title(main_title, fontsize=12, pad=20)
     if sub_title:
-        plt.suptitle(sub_title, fontsize=9, y=0.96)
+        plt.suptitle(sub_title, fontsize=9, y=0.98)
 
     # --- Embed in Tkinter ---
     canvas = FigureCanvasTkAgg(fig, master=container_frame)
@@ -182,14 +187,16 @@ def render_matplotlib_plot(parsed, config, container_frame, info_panel=None):
     toolbar = NavigationToolbar2Tk(canvas, toolbar_frame)
     toolbar.update()
 
-    active_patch = None  # Track currently selected route
+    active_patch = None
 
     def on_click(event):
         nonlocal active_patch
         if event.inaxes != ax or toolbar.mode:
             if active_patch and not toolbar.mode:
+                # Restore original appearance
                 active_patch.set_linewidth(active_patch.original_lw)
-                active_patch.set_edgecolor(active_patch.original_color)
+                active_patch.set_edgecolor(active_patch.original_edgecolor)
+                active_patch.set_facecolor(active_patch.original_facecolor)
                 active_patch.set_zorder(active_patch.original_zorder)
                 active_patch = None
                 if info_panel:
@@ -199,29 +206,37 @@ def render_matplotlib_plot(parsed, config, container_frame, info_panel=None):
 
         pick_radius = 5
         new_active_patch = None
+        # Iterate through visible route patches only
         for patch in reversed(route_patches):
+            if not patch.get_visible(): # Skip invisible patches
+                continue
             contains, _ = patch.contains(event, radius=pick_radius)
             if contains:
                 new_active_patch = patch
                 break
 
         if active_patch and active_patch != new_active_patch:
+            # Restore previously active patch
             active_patch.set_linewidth(active_patch.original_lw)
-            active_patch.set_edgecolor(active_patch.original_color)
+            active_patch.set_edgecolor(active_patch.original_edgecolor)
+            active_patch.set_facecolor(active_patch.original_facecolor)
             active_patch.set_zorder(active_patch.original_zorder)
             active_patch = None
 
         if new_active_patch and new_active_patch != active_patch:
             active_patch = new_active_patch
-            active_patch.set_linewidth(3)  # Thicker line for selection
+            # Highlight the new active patch
+            active_patch.set_linewidth(active_patch.original_lw * 2.5) # Highlight relative to new thin width
             active_patch.set_edgecolor(ROUTE_HIGHLIGHT_COLOR)
+            active_patch.set_facecolor(ROUTE_HIGHLIGHT_COLOR)
             active_patch.set_zorder(10)
             if info_panel:
                 _update_info_panel_content(info_panel, active_patch.route_data, pins_by_index, config)
         elif not new_active_patch:
             if active_patch:
                 active_patch.set_linewidth(active_patch.original_lw)
-                active_patch.set_edgecolor(active_patch.original_color)
+                active_patch.set_edgecolor(active_patch.original_edgecolor)
+                active_patch.set_facecolor(active_patch.original_facecolor)
                 active_patch.set_zorder(active_patch.original_zorder)
                 active_patch = None
             if info_panel:
@@ -304,3 +319,4 @@ def render_matplotlib_plot(parsed, config, container_frame, info_panel=None):
 
     canvas.mpl_connect("button_press_event", on_click)
     canvas.draw()
+

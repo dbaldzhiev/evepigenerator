@@ -1,1 +1,4 @@
 pi_viewer.log
+viewer/__pycache__/
+.venv/
+.vscode/

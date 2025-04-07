@@ -28,6 +28,7 @@ class PIViewerApp(tk.Tk):
         self.last_parsed = None
         self.current_file_path = None
         self.config_data = None # Initialize
+        self.show_routes_var = tk.BooleanVar(value=True) # Variable for route visibility
 
         try:
             self.config_data = Config(CONFIG_PATH)
@@ -76,6 +77,14 @@ class PIViewerApp(tk.Tk):
         load_button = tk.Button(sidebar, text="Load File...", command=self.load_file_from_dialog, bg="#1abc9c", fg="white", relief=tk.FLAT, font=("Segoe UI", 10))
         load_button.pack(pady=10, padx=10, fill="x")
 
+        # Route Toggle Checkbox
+        route_toggle = tk.Checkbutton(sidebar, text="Show Routes", variable=self.show_routes_var,
+                                      command=self.toggle_routes, bg="#2c3e50", fg="white",
+                                      selectcolor="#34495e", activebackground="#2c3e50",
+                                      activeforeground="white", font=("Segoe UI", 10))
+        route_toggle.pack(pady=(0, 10), padx=10, anchor='w')
+
+
         template_label = tk.Label(sidebar, text="Templates", bg="#2c3e50", fg="white", font=("Segoe UI", 12, "bold"))
         template_label.pack(pady=(5, 5))
 
@@ -105,7 +114,7 @@ class PIViewerApp(tk.Tk):
             widget.destroy() # Clear everything first
         info_title = tk.Label(self.info_panel, text="Info Panel", bg="#eeeeee", font=("Segoe UI", 12, "bold"))
         info_title.pack(pady=(10, 5), anchor='nw', padx=10) # Anchor top-left
-        self.info_content_label = tk.Label(self.info_panel, text="Load a PI JSON file or select a template from the list.\n\nClick on a route (orange line) in the plot to see detailed route information here.", bg="#eeeeee", justify=tk.LEFT, wraplength=230)
+        self.info_content_label = tk.Label(self.info_panel, text="Load a PI JSON file or select a template from the list.\n\nClick on a route (curved blue arrow) in the plot to see detailed route information here.", bg="#eeeeee", justify=tk.LEFT, wraplength=230)
         self.info_content_label.pack(pady=5, padx=10, anchor="nw")
 
 
@@ -356,11 +365,13 @@ class PIViewerApp(tk.Tk):
                 logging.debug("Resetting info panel to default.")
                 self._setup_info_panel_default()
 
-                # Render the plot, passing the info_panel for updates
-                logging.debug("Calling render_matplotlib_plot.")
-                render_matplotlib_plot(self.last_parsed, self.config_data, self.plot_frame, self.info_panel)
+                # Render the plot, passing the info_panel and route visibility state
+                show_routes_state = self.show_routes_var.get()
+                logging.debug(f"Calling render_matplotlib_plot with show_routes={show_routes_state}.")
+                render_matplotlib_plot(self.last_parsed, self.config_data, self.plot_frame,
+                                       self.info_panel, show_routes=show_routes_state)
                 logging.debug("render_matplotlib_plot finished.")
-                # Status update handled by calling function (process_file or refresh_plot_after_resolve)
+                # Status update handled by calling function (process_file or refresh_plot_after_resolve or toggle_routes)
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to render plot: {e}")
                 self.update_status("Error: Failed to render plot.")
@@ -383,6 +394,20 @@ class PIViewerApp(tk.Tk):
 
         # Reset info panel to its default state
         self._setup_info_panel_default()
+
+    def toggle_routes(self):
+        """Called when the 'Show Routes' checkbox is toggled."""
+        route_state = self.show_routes_var.get()
+        logging.info(f"Route visibility toggled to: {route_state}")
+        self.update_status(f"Routes {'shown' if route_state else 'hidden'}. Refreshing plot...")
+        # Re-render the plot with the new setting
+        # Ensure we have data to render
+        if self.last_parsed:
+            self.refresh_plot()
+            self.update_status(f"Plot refreshed. Routes are {'shown' if route_state else 'hidden'}.")
+        else:
+            logging.warning("Toggle routes called but no data loaded.")
+            self.update_status("Load data to toggle route visibility.")
 
 
 if __name__ == "__main__":
