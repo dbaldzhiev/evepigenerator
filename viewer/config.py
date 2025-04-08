@@ -7,7 +7,7 @@ import logging
 class Config:
     DEFAULT_LABEL_SETTINGS = {
         "show_pin_name": True,
-        "show_pin_id": False,
+        "show_pin_id": True,
         "show_schematic_name": True,
         "show_schematic_id": False,
     }
@@ -113,20 +113,36 @@ class Config:
         return {key: settings.get(key, default_value)
                 for key, default_value in self.DEFAULT_LABEL_SETTINGS.items()}
 
-
+    # --- NEW: Method to update label settings in the config data ---
     def save_label_settings(self, settings_dict):
-        """Saves the given label display settings dictionary."""
+        """
+        Updates the label display settings within the config data structure.
+        Does NOT save to file; call self.save() externally for that.
+
+        Args:
+            settings_dict (dict): A dictionary containing the label settings
+                                  (e.g., {'show_pin_name': True, ...}).
+
+        Returns:
+            bool: True if settings were updated successfully, False otherwise.
+        """
         if not isinstance(settings_dict, dict):
             logging.error(f"Attempted to save invalid label settings (not a dict): {settings_dict}")
             return False
 
-        # Validate keys before saving
-        valid_settings = {key: settings_dict.get(key, default_value)
-                          for key, default_value in self.DEFAULT_LABEL_SETTINGS.items()}
-
+        # Ensure the ui_settings section exists
         ui_settings = self.data.setdefault("ui_settings", {})
+
+        # Validate keys against defaults before saving, only keep known keys
+        valid_settings = {}
+        for key, default_value in self.DEFAULT_LABEL_SETTINGS.items():
+            # Use the value from settings_dict if present, otherwise keep default
+            # Ensure the value is a boolean
+            valid_settings[key] = bool(settings_dict.get(key, default_value))
+
+        # Update the label_display section
         ui_settings["label_display"] = valid_settings
-        logging.info(f"Updating label settings in config data: {valid_settings}")
+        logging.info(f"Updating label settings in config data (will be saved on next Config.save()): {valid_settings}")
         # The actual saving to file happens when self.save() is called externally
         return True
 
@@ -153,10 +169,12 @@ class Config:
                 self.data.setdefault("commodities", {})
                 self.data.setdefault("pin_types", {})
                 self.data.setdefault("planet_types", {})
-                self.data.setdefault("ui_settings", {}).setdefault("label_display", self.DEFAULT_LABEL_SETTINGS) # Ensure section exists
+                # Ensure ui_settings and label_display exist before saving
+                ui_settings = self.data.setdefault("ui_settings", {})
+                ui_settings.setdefault("label_display", self.DEFAULT_LABEL_SETTINGS)
+
                 json.dump(self.data, f, indent=2, sort_keys=True)
             logging.info(f"Configuration saved successfully to {self.path}")
         except Exception as e:
              logging.error(f"Failed to save configuration to {self.path}: {e}")
-             raise
-
+             raise # Re-raise the exception so the caller knows saving failed

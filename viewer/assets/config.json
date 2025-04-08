@@ -1,8 +1,8 @@
 {  "ui_settings": {
   "label_display": {
-    "show_pin_id": false,
+    "show_pin_id": true,
     "show_pin_name": true,
-    "show_schematic_id": false,
+    "show_schematic_id": true,
     "show_schematic_name": true
   }
 },

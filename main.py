@@ -659,7 +659,7 @@ class PIViewerApp(tk.Tk):
         """Opens the dialog to configure pin label display."""
         dialog = tk.Toplevel(self)
         dialog.title("Pin Label Display Settings")
-        dialog.geometry("350x250") # Adjusted size
+        dialog.geometry("350x280") # Adjusted size for new button
         dialog.resizable(False, False)
         dialog.grab_set() # Make modal
 
@@ -688,38 +688,51 @@ class PIViewerApp(tk.Tk):
             logging.info("Applying label settings changes.")
             for key, temp_var in temp_vars.items():
                 self.label_settings_vars[key].set(temp_var.get())
-            self.refresh_plot() # Re-render with new label settings
-            self.update_status("Label display settings applied.")
+            # Only refresh if data is loaded
+            if self.last_parsed:
+                 self.refresh_plot() # Re-render with new label settings
+                 self.update_status("Label display settings applied.")
+            else:
+                 self.update_status("Label display settings updated (no plot to refresh).")
 
+
+        # --- NEW: Save and Apply Function ---
         def save_and_apply():
             """Applies changes and saves them as default to config."""
-            apply_changes() # Apply first
+            apply_changes() # Apply first to update current view and app state vars
             logging.info("Saving label settings as default.")
+            # Get the *applied* settings from the main app variables
             current_settings = {key: var.get() for key, var in self.label_settings_vars.items()}
             try:
+                # Update the config object's data
                 if self.config_data.save_label_settings(current_settings):
-                    self.config_data.save() # Persist changes to file
+                    # Persist changes to the file
+                    self.config_data.save()
                     self.update_status("Label display settings saved as default.")
                     messagebox.showinfo("Settings Saved", "Label display settings saved as default.", parent=dialog)
                 else:
+                     # Should not happen if validation is basic
                      messagebox.showerror("Error", "Failed to prepare settings for saving.", parent=dialog)
+                     logging.error("save_label_settings returned False.")
             except Exception as e:
                  messagebox.showerror("Error", f"Failed to save settings to configuration file:\n{e}", parent=dialog)
                  logging.exception("Failed to save label settings to config file.")
-            dialog.destroy()
-
+            dialog.destroy() # Close dialog after saving
 
         def cancel():
             logging.debug("Label settings dialog cancelled.")
             dialog.destroy()
 
-        # Buttons on the right side
+        # --- Updated Button Layout ---
+        # Buttons on the right side, from right to left: Cancel, Apply, Save
         cancel_btn = tk.Button(button_frame, text="Cancel", command=cancel, width=10)
         cancel_btn.pack(side=tk.RIGHT, padx=(5, 0))
 
+        # Apply button now just applies and closes
         apply_btn = tk.Button(button_frame, text="Apply", command=lambda: [apply_changes(), dialog.destroy()], width=10)
         apply_btn.pack(side=tk.RIGHT, padx=(5,0))
 
+        # New Save as Default button
         save_btn = tk.Button(button_frame, text="Save as Default", command=save_and_apply, width=15)
         save_btn.pack(side=tk.RIGHT)
 
