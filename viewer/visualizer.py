@@ -127,7 +127,7 @@ def render_matplotlib_plot(parsed, config, container_frame, info_panel=None, sho
 
         # Add pin label text (without index for plot display)
         label_text = _format_pin_display_name(pin, include_index=False).split('\n')[0] # Show only first line initially
-        label_artist = ax.text(x, y + 0.0015, label_text, ha='center', va='bottom', fontsize=7,
+        label_artist = ax.text(x, y + 0.003, label_text, ha='center', va='bottom', fontsize=7,
                                bbox=dict(facecolor=PIN_LABEL_BG_COLOR, edgecolor='none', alpha=PIN_LABEL_ALPHA, pad=0.3),
                                zorder=style["zorder"] + 1, # Label above pin
                                visible=show_labels) # Set initial visibility
