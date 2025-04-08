@@ -1,19 +1,19 @@
-{  "ui_settings": {
-  "label_display": {
-    "show_pin_id": true,
-    "show_pin_name": true,
-    "show_schematic_id": true,
-    "show_schematic_name": true
-  }
-},
+{
   "commodities": {
     "12836": "Transcranial Microcontrollers",
     "15317": "Genetically Enhanced Livestock",
     "17136": "Ukomi Superconductors",
     "17392": "Data Chips",
     "17898": "High-tech Transmitters",
+    "2073": "Microorganisms",
     "2267": "Base Metals",
+    "2268": "Aqueous Liquids",
+    "2272": "Heavy Metals",
+    "2287": "Complex Organisms",
+    "2288": "Carbon Compounds",
     "2306": "Non-CS Crystals",
+    "2309": "Ionic Solutions",
+    "2310": "Noble Gas",
     "2312": "Supertensile Plastics",
     "2317": "Oxides",
     "2319": "Test Cultures",
@@ -143,5 +143,13 @@
     "11": "Temperate",
     "2015": "Lava",
     "2016": "Barren"
+  },
+  "ui_settings": {
+    "label_display": {
+      "show_pin_id": true,
+      "show_pin_name": true,
+      "show_schematic_id": true,
+      "show_schematic_name": true
+    }
   }
 }
