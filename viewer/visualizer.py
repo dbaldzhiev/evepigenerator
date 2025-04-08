@@ -46,12 +46,10 @@ def _get_pin_style(pin_category):
             return style
     return DEFAULT_STYLE # Fallback
 
-def _format_pin_display_name(pin_data, include_index=True):
+def _format_info_panel_pin_name(pin_data):
     """
-    Creates a user-friendly display name for a pin.
-    Args:
-        pin_data (dict): The pin data dictionary.
-        include_index (bool): Whether to include the original index in the name.
+    Creates a user-friendly multi-line display name for a pin in the info panel.
+    (Renamed from _format_pin_display_name)
     """
     category = pin_data.get('category', 'Unknown')
     type_id = pin_data.get('type_id', 'N/A')
@@ -65,8 +63,7 @@ def _format_pin_display_name(pin_data, include_index=True):
         # Otherwise, use the resolved type_name
         name = f"{type_name}"
 
-    if include_index:
-        name += f" (#{original_index})"
+    name += f" (#{original_index})" # Always include index in info panel
 
     # Add schematic info if present
     schematic_name = pin_data.get("schematic_name")
@@ -78,16 +75,73 @@ def _format_pin_display_name(pin_data, include_index=True):
 
     return name
 
+# --- New function for plot labels ---
+def _format_plot_label(pin_data, label_settings):
+    """
+    Creates the label string for a pin on the plot based on settings.
+    Args:
+        pin_data (dict): The pin data dictionary.
+        label_settings (dict): Dictionary with boolean flags for label components.
+                                (e.g., {'show_pin_name': True, 'show_pin_id': False, ...})
+    """
+    parts = []
+    type_name_short = pin_data.get('type_name', 'Unknown Type').split(' (')[0] # Get "Basic Industrial Facility" part
+    type_id = pin_data.get('type_id')
+    schematic_name = pin_data.get("schematic_name")
+    schematic_id = pin_data.get("schematic_id")
 
-def render_matplotlib_plot(parsed, config, container_frame, info_panel=None, show_routes=True, show_labels=True):
+    if label_settings.get("show_pin_name", True):
+        parts.append(type_name_short)
+    if label_settings.get("show_pin_id", False) and type_id is not None:
+        parts.append(f"ID:{type_id}")
+
+    schematic_parts = []
+    if label_settings.get("show_schematic_name", True) and schematic_name:
+        schematic_parts.append(schematic_name)
+    if label_settings.get("show_schematic_id", False) and schematic_id is not None:
+        # Avoid duplicating ID if name is already showing it (unlikely with current config)
+        if not schematic_name or str(schematic_id) not in schematic_name:
+             schematic_parts.append(f"SchID:{schematic_id}")
+
+    if schematic_parts:
+        parts.append(f"({', '.join(schematic_parts)})") # Combine schematic info
+
+    # Join parts, prioritizing name/ID over schematic if too long? For now, just join.
+    label = "\n".join(p for p in parts if p) # Join non-empty parts with newline
+
+    # Limit length? Maybe later. For now, show what's requested.
+    # max_len = 30
+    # if len(label) > max_len:
+    #     label = label[:max_len-3] + "..."
+
+    return label if label else "" # Return empty string if nothing is selected
+
+
+# --- Updated render_matplotlib_plot signature ---
+def render_matplotlib_plot(parsed, config, container_frame, info_panel=None,
+                           show_routes=True, show_labels=True, label_settings=None):
     """
     Renders the PI layout plot with interactive elements.
+
+    Args:
+        parsed (dict): Parsed PI data.
+        config (Config): Config object.
+        container_frame (tk.Widget): Parent frame for the canvas.
+        info_panel (tk.Widget, optional): Panel to display details. Defaults to None.
+        show_routes (bool, optional): Initial visibility of routes. Defaults to True.
+        show_labels (bool, optional): Initial visibility of labels. Defaults to True.
+        label_settings (dict, optional): Dictionary controlling label content.
+                                         Defaults to Config.DEFAULT_LABEL_SETTINGS.
 
     Returns:
         tuple: (canvas, label_artists) or (None, None) on failure.
                canvas is the FigureCanvasTkAgg object.
                label_artists is a list of matplotlib Text objects for pin labels.
     """
+    # Use default settings if none provided
+    if label_settings is None:
+        label_settings = config.DEFAULT_LABEL_SETTINGS # Get defaults from Config class
+
     for widget in container_frame.winfo_children():
         widget.destroy()
 
@@ -125,13 +179,15 @@ def render_matplotlib_plot(parsed, config, container_frame, info_panel=None, sho
         pin_artist.pin_data = pin # Attach pin data to the artist
         pin_artists[pin['index']] = pin_artist
 
-        # Add pin label text (without index for plot display)
-        label_text = _format_pin_display_name(pin, include_index=False).split('\n')[0] # Show only first line initially
-        label_artist = ax.text(x, y + 0.003, label_text, ha='center', va='bottom', fontsize=7,
-                               bbox=dict(facecolor=PIN_LABEL_BG_COLOR, edgecolor='none', alpha=PIN_LABEL_ALPHA, pad=0.3),
-                               zorder=style["zorder"] + 1, # Label above pin
-                               visible=show_labels) # Set initial visibility
-        label_artists.append(label_artist)
+        # --- Use new label formatting function ---
+        label_text = _format_plot_label(pin, label_settings)
+        if label_text: # Only create label if there's content
+            label_artist = ax.text(x, y + 0.003, label_text, ha='center', va='bottom', fontsize=7,
+                                   bbox=dict(facecolor=PIN_LABEL_BG_COLOR, edgecolor='none', alpha=PIN_LABEL_ALPHA, pad=0.3),
+                                   zorder=style["zorder"] + 1, # Label above pin
+                                   visible=show_labels) # Set initial visibility
+            label_artists.append(label_artist)
+        # --- End label formatting update ---
 
     # --- Plot Links ---
     logging.debug("Plotting links...")
@@ -432,8 +488,8 @@ def render_matplotlib_plot(parsed, config, container_frame, info_panel=None, sho
 
         bg_color = panel.cget('bg')
         pin_index = pin_data['index']
-        # Get multi-line name including index for info panel
-        pin_name_full = _format_pin_display_name(pin_data, include_index=True)
+        # Use the specific info panel formatting function
+        pin_name_full = _format_info_panel_pin_name(pin_data)
 
         tk.Label(panel, text="Selected Pin", font=("Segoe UI", 11, "bold"),
                  bg=bg_color).pack(pady=(0, 5), anchor='nw', padx=10)
@@ -457,7 +513,8 @@ def render_matplotlib_plot(parsed, config, container_frame, info_panel=None, sho
             for route in incoming_routes:
                  try:
                      source_pin = pins_lookup[route['source']]
-                     source_name_short = _format_pin_display_name(source_pin, include_index=False).split('\n')[0]
+                     # Use info panel format for source pin name in route list
+                     source_name_short = _format_info_panel_pin_name(source_pin).split('\n')[0]
                      commodity = route.get('commodity_name', f"Unknown ({route.get('commodity_id')})")
                      qty = route.get('quantity', 0)
                      route_text = f"  • From {source_name_short}: {qty:,} x {commodity}"
@@ -473,7 +530,8 @@ def render_matplotlib_plot(parsed, config, container_frame, info_panel=None, sho
             for route in outgoing_routes:
                  try:
                      target_pin = pins_lookup[route['target']]
-                     target_name_short = _format_pin_display_name(target_pin, include_index=False).split('\n')[0]
+                     # Use info panel format for target pin name in route list
+                     target_name_short = _format_info_panel_pin_name(target_pin).split('\n')[0]
                      commodity = route.get('commodity_name', f"Unknown ({route.get('commodity_id')})")
                      qty = route.get('quantity', 0)
                      route_text = f"  • To {target_name_short}: {qty:,} x {commodity}"
@@ -505,8 +563,9 @@ def render_matplotlib_plot(parsed, config, container_frame, info_panel=None, sho
         try:
             pin1 = pins_lookup[pin1_idx]
             pin2 = pins_lookup[pin2_idx]
-            pin1_name = _format_pin_display_name(pin1, include_index=True) # Full name for panel
-            pin2_name = _format_pin_display_name(pin2, include_index=True) # Full name for panel
+            # Use info panel format for pin names
+            pin1_name = _format_info_panel_pin_name(pin1)
+            pin2_name = _format_info_panel_pin_name(pin2)
 
             tk.Label(panel, text=f"Selected Route Group ({len(route_data_list)} routes)", font=("Segoe UI", 11, "bold"),
                      bg=bg_color).pack(pady=(0, 5), anchor='nw', padx=10)
@@ -527,7 +586,8 @@ def render_matplotlib_plot(parsed, config, container_frame, info_panel=None, sho
                 comm_id = route.get('commodity_id')
                 comm_name = route.get('commodity_name', f"Unknown ({comm_id})")
                 qty = route.get('quantity', 0)
-                direction = f"{route['source']} -> {route['target']}" # Indicate direction based on original indices
+                # Use original pin indices for direction display in info panel
+                direction = f"#{pins_lookup[route['source']]['original_index']} -> #{pins_lookup[route['target']]['original_index']}"
                 commodities_summary[comm_name]['qty'] += qty
                 commodities_summary[comm_name]['directions'].add(direction)
 
@@ -537,7 +597,6 @@ def render_matplotlib_plot(parsed, config, container_frame, info_panel=None, sho
             if commodities_summary:
                 for comm_name, data in commodities_summary.items():
                     # Show directionality if routes go both ways for the same commodity
-                    # Note: Uses original pin indices for direction display
                     direction_str = f" ({', '.join(sorted(list(data['directions'])))})" if len(data['directions']) > 1 else ""
                     summary_text = f"  • {comm_name}: {data['qty']:,}{direction_str}"
                     tk.Label(panel, text=summary_text, bg=bg_color, justify=tk.LEFT,

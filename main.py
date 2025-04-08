@@ -29,7 +29,7 @@ class PIViewerApp(tk.Tk):
         self.current_file_path = None   # Path to the currently loaded JSON file
         self.config_data = None         # Holds the Config object
         self.show_routes_var = tk.BooleanVar(value=True) # Controls route visibility
-        self.show_labels_var = tk.BooleanVar(value=True) # Controls label visibility
+        self.show_labels_var = tk.BooleanVar(value=True) # Controls label visibility (overall toggle)
         self.current_canvas = None      # Holds the current Matplotlib canvas object
         self.current_label_artists = [] # Holds the label artists for toggling
 
@@ -37,6 +37,14 @@ class PIViewerApp(tk.Tk):
         try:
             self.config_data = Config(CONFIG_PATH)
             logging.info(f"Configuration loaded successfully from {CONFIG_PATH}")
+            # --- Load Label Settings ---
+            initial_label_settings = self.config_data.get_label_settings()
+            self.label_settings_vars = {
+                key: tk.BooleanVar(value=value)
+                for key, value in initial_label_settings.items()
+            }
+            logging.info(f"Initial label display settings loaded: {initial_label_settings}")
+
         except FileNotFoundError:
             messagebox.showerror("Error", f"Configuration file not found: {CONFIG_PATH}")
             logging.error(f"Configuration file not found: {CONFIG_PATH}")
@@ -59,6 +67,21 @@ class PIViewerApp(tk.Tk):
         self.update_status("Application ready. Load a PI JSON file, paste JSON, or select a template.")
 
     def build_ui(self):
+        # --- Menu Bar ---
+        menubar = tk.Menu(self)
+        self.config(menu=menubar)
+
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Load File...", command=self.load_file_from_dialog)
+        file_menu.add_command(label="Paste JSON...", command=self.paste_json_from_dialog)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.quit)
+
+        settings_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Settings", menu=settings_menu)
+        settings_menu.add_command(label="Label Display...", command=self.open_label_settings_dialog)
+
         # --- Main Panes ---
         sidebar = tk.Frame(self, width=250, bg="#2c3e50")
         sidebar.pack(side="left", fill="y", padx=(0, 1), pady=0)
@@ -75,15 +98,15 @@ class PIViewerApp(tk.Tk):
         self.info_panel.pack_propagate(False)
 
         # --- Sidebar Widgets ---
-        load_button = tk.Button(sidebar, text="Load File...", command=self.load_file_from_dialog, bg="#1abc9c", fg="white", relief=tk.FLAT, font=("Segoe UI", 10))
-        load_button.pack(pady=(10, 5), padx=10, fill="x") # Adjusted padding
-
-        paste_button = tk.Button(sidebar, text="Paste JSON...", command=self.paste_json_from_dialog, bg="#3498db", fg="white", relief=tk.FLAT, font=("Segoe UI", 10))
-        paste_button.pack(pady=(0, 5), padx=10, fill="x") # Adjusted padding
+        # Buttons moved to menu, keep toggles
+        # load_button = tk.Button(sidebar, text="Load File...", command=self.load_file_from_dialog, bg="#1abc9c", fg="white", relief=tk.FLAT, font=("Segoe UI", 10))
+        # load_button.pack(pady=(10, 5), padx=10, fill="x") # Adjusted padding
+        # paste_button = tk.Button(sidebar, text="Paste JSON...", command=self.paste_json_from_dialog, bg="#3498db", fg="white", relief=tk.FLAT, font=("Segoe UI", 10))
+        # paste_button.pack(pady=(0, 5), padx=10, fill="x") # Adjusted padding
 
         # --- Toggles Frame ---
         toggle_frame = tk.Frame(sidebar, bg="#2c3e50")
-        toggle_frame.pack(pady=(5, 10), padx=10, fill='x')
+        toggle_frame.pack(pady=(10, 10), padx=10, fill='x') # Added top padding
 
         route_toggle = tk.Checkbutton(toggle_frame, text="Show Routes", variable=self.show_routes_var,
                                       command=self.toggle_routes, bg="#2c3e50", fg="white",
@@ -538,12 +561,15 @@ class PIViewerApp(tk.Tk):
                 # Get current toggle states
                 show_routes_state = self.show_routes_var.get()
                 show_labels_state = self.show_labels_var.get()
-                logging.debug(f"Calling render_matplotlib_plot with show_routes={show_routes_state}, show_labels={show_labels_state}.")
+                # Get current label content settings
+                current_label_settings = {key: var.get() for key, var in self.label_settings_vars.items()}
+                logging.debug(f"Calling render_matplotlib_plot with show_routes={show_routes_state}, show_labels={show_labels_state}, label_settings={current_label_settings}.")
 
-                # Render the plot, passing toggle states and getting back canvas/labels
+                # Render the plot, passing toggle states and label settings
                 canvas, label_artists = render_matplotlib_plot(
                     self.last_parsed, self.config_data, self.plot_frame,
-                    self.info_panel, show_routes=show_routes_state, show_labels=show_labels_state
+                    self.info_panel, show_routes=show_routes_state,
+                    show_labels=show_labels_state, label_settings=current_label_settings
                 )
                 # Store canvas and labels for toggling later
                 self.current_canvas = canvas
@@ -598,7 +624,8 @@ class PIViewerApp(tk.Tk):
             self.update_status("Load data to toggle route visibility.")
 
     def toggle_labels(self):
-        """Handles the 'Show Labels' checkbox toggle without full re-render."""
+        """Handles the 'Show Labels' checkbox toggle (overall visibility)."""
+        # This now only controls the *overall* visibility. Content is set via settings.
         label_state = self.show_labels_var.get()
         state_text = 'shown' if label_state else 'hidden'
         logging.info(f"Label visibility toggled to: {label_state}")
@@ -617,7 +644,7 @@ class PIViewerApp(tk.Tk):
                  self.refresh_plot()
 
         elif self.last_parsed:
-             # Data exists, but canvas/labels aren't stored (shouldn't happen often)
+             # Data exists, but canvas/artists aren't stored (shouldn't happen often)
              # Do a full refresh
              logging.warning("Toggle labels called, data exists but no canvas/artists. Performing full refresh.")
              self.update_status(f"Labels {state_text}. Refreshing plot...")
@@ -626,6 +653,79 @@ class PIViewerApp(tk.Tk):
         else:
              logging.warning("Toggle labels called but no data loaded.")
              self.update_status("Load data to toggle label visibility.")
+
+    # --- Settings Dialog ---
+    def open_label_settings_dialog(self):
+        """Opens the dialog to configure pin label display."""
+        dialog = tk.Toplevel(self)
+        dialog.title("Pin Label Display Settings")
+        dialog.geometry("350x250") # Adjusted size
+        dialog.resizable(False, False)
+        dialog.grab_set() # Make modal
+
+        # Temporary variables for the dialog, initialized from app state
+        temp_vars = {key: tk.BooleanVar(value=var.get()) for key, var in self.label_settings_vars.items()}
+
+        main_frame = tk.Frame(dialog, padx=15, pady=15)
+        main_frame.pack(fill="both", expand=True)
+
+        tk.Label(main_frame, text="Show in Pin Labels:", font=("Segoe UI", 10, "bold")).pack(anchor='w', pady=(0, 10))
+
+        # Create checkboxes linked to temp_vars
+        tk.Checkbutton(main_frame, text="Pin Name (Category)", variable=temp_vars["show_pin_name"], anchor='w').pack(fill='x')
+        tk.Checkbutton(main_frame, text="Pin Type ID", variable=temp_vars["show_pin_id"], anchor='w').pack(fill='x')
+        tk.Checkbutton(main_frame, text="Schematic Name", variable=temp_vars["show_schematic_name"], anchor='w').pack(fill='x')
+        tk.Checkbutton(main_frame, text="Schematic ID", variable=temp_vars["show_schematic_id"], anchor='w').pack(fill='x')
+
+        # --- Button Frame ---
+        button_frame = tk.Frame(main_frame)
+        # Pack buttons to the bottom right
+        button_frame.pack(side=tk.BOTTOM, fill="x", pady=(20, 0))
+        button_frame.column_configure(0, weight=1) # Push buttons right
+
+        def apply_changes():
+            """Applies the temporary settings to the main app state and refreshes the plot."""
+            logging.info("Applying label settings changes.")
+            for key, temp_var in temp_vars.items():
+                self.label_settings_vars[key].set(temp_var.get())
+            self.refresh_plot() # Re-render with new label settings
+            self.update_status("Label display settings applied.")
+
+        def save_and_apply():
+            """Applies changes and saves them as default to config."""
+            apply_changes() # Apply first
+            logging.info("Saving label settings as default.")
+            current_settings = {key: var.get() for key, var in self.label_settings_vars.items()}
+            try:
+                if self.config_data.save_label_settings(current_settings):
+                    self.config_data.save() # Persist changes to file
+                    self.update_status("Label display settings saved as default.")
+                    messagebox.showinfo("Settings Saved", "Label display settings saved as default.", parent=dialog)
+                else:
+                     messagebox.showerror("Error", "Failed to prepare settings for saving.", parent=dialog)
+            except Exception as e:
+                 messagebox.showerror("Error", f"Failed to save settings to configuration file:\n{e}", parent=dialog)
+                 logging.exception("Failed to save label settings to config file.")
+            dialog.destroy()
+
+
+        def cancel():
+            logging.debug("Label settings dialog cancelled.")
+            dialog.destroy()
+
+        # Buttons on the right side
+        cancel_btn = tk.Button(button_frame, text="Cancel", command=cancel, width=10)
+        cancel_btn.pack(side=tk.RIGHT, padx=(5, 0))
+
+        apply_btn = tk.Button(button_frame, text="Apply", command=lambda: [apply_changes(), dialog.destroy()], width=10)
+        apply_btn.pack(side=tk.RIGHT, padx=(5,0))
+
+        save_btn = tk.Button(button_frame, text="Save as Default", command=save_and_apply, width=15)
+        save_btn.pack(side=tk.RIGHT)
+
+
+        dialog.protocol("WM_DELETE_WINDOW", cancel) # Handle closing window
+        dialog.wait_window()
 
 
 if __name__ == "__main__":

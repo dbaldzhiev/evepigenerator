@@ -1,4 +1,11 @@
-{
+{  "ui_settings": {
+  "label_display": {
+    "show_pin_id": false,
+    "show_pin_name": true,
+    "show_schematic_id": false,
+    "show_schematic_name": true
+  }
+},
   "commodities": {
     "12836": "Transcranial Microcontrollers",
     "15317": "Genetically Enhanced Livestock",

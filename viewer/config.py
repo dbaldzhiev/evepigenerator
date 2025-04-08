@@ -5,6 +5,13 @@ import datetime
 import logging
 
 class Config:
+    DEFAULT_LABEL_SETTINGS = {
+        "show_pin_name": True,
+        "show_pin_id": False,
+        "show_schematic_name": True,
+        "show_schematic_id": False,
+    }
+
     def __init__(self, path):
         self.path = path
         try:
@@ -12,10 +19,20 @@ class Config:
                 self.data = json.load(f)
         except FileNotFoundError:
             logging.error(f"Configuration file not found at {path}")
+            # Initialize with defaults if file not found? Or raise? Let's raise for now.
             raise
         except json.JSONDecodeError as e:
             logging.error(f"Error decoding JSON from {path}: {e}")
             raise
+
+        # Ensure ui_settings and label_display exist, using defaults if necessary
+        ui_settings = self.data.setdefault("ui_settings", {})
+        label_settings = ui_settings.setdefault("label_display", {})
+        # Populate missing default keys without overwriting existing ones
+        for key, default_value in self.DEFAULT_LABEL_SETTINGS.items():
+            label_settings.setdefault(key, default_value)
+        logging.debug(f"Initialized/Loaded label settings: {label_settings}")
+
 
         # --- One-time Migration from separate 'schematics' to 'commodities' ---
         if "schematics" in self.data:
@@ -48,7 +65,6 @@ class Config:
 
     def get_pin_type(self, type_id):
         """Gets the category and planet name for a pin type ID."""
-        # Ensure type_id is treated as string for lookup
         type_id_str = str(type_id) if type_id is not None else "Unknown"
         meta = self.data.get("pin_types", {}).get(type_id_str)
         if meta:
@@ -57,14 +73,9 @@ class Config:
 
     def get_commodity(self, commodity_id):
         """Gets the name for a commodity ID."""
-        # Ensure commodity_id is treated as string for lookup
         commodity_id_str = str(commodity_id) if commodity_id is not None else "Unknown"
         return self.data.get("commodities", {}).get(commodity_id_str, f"Unknown ({commodity_id_str})")
 
-    # get_schematic is essentially identical to get_commodity now.
-    # We can keep it for backward compatibility within the parser or remove it
-    # and update the parser to use get_commodity directly. Let's keep it for now
-    # but acknowledge it's just a wrapper.
     def get_schematic(self, schematic_id):
         """
         Retrieves schematic info (name) by looking up the schematic_id in the
@@ -72,14 +83,12 @@ class Config:
         """
         name = self.get_commodity(schematic_id)
         if f"Unknown ({schematic_id})" in name:
-             return None # Return None if the commodity name is unknown
-        return {"name": name} # Return in a dict structure
+             return None
+        return {"name": name}
 
     def get_planet_name(self, planet_id):
         """Looks up the planet name from its ID in the config."""
-        # Use 0 as a fallback ID if planet_id is None or invalid
         lookup_id = str(planet_id) if planet_id is not None else "0"
-        # Provide a more descriptive unknown if the ID itself was None/invalid
         default_name = "Unknown Planet (ID Missing)" if planet_id is None else f"Unknown Planet (ID: {lookup_id})"
         return self.data.get("planet_types", {}).get(lookup_id, default_name)
 
@@ -95,9 +104,35 @@ class Config:
         pin_types[str(id)] = { "category": category, "planet": planet }
         logging.info(f"Added/Updated pin type: ID={id}, Category='{category}', Planet='{planet}'")
 
+    # --- Label Settings Methods ---
+    def get_label_settings(self):
+        """Returns the current label display settings dictionary."""
+        # Ensure defaults are loaded if keys are missing (should be handled by __init__)
+        settings = self.data.get("ui_settings", {}).get("label_display", {})
+        # Make sure all default keys are present in the returned dict
+        return {key: settings.get(key, default_value)
+                for key, default_value in self.DEFAULT_LABEL_SETTINGS.items()}
+
+
+    def save_label_settings(self, settings_dict):
+        """Saves the given label display settings dictionary."""
+        if not isinstance(settings_dict, dict):
+            logging.error(f"Attempted to save invalid label settings (not a dict): {settings_dict}")
+            return False
+
+        # Validate keys before saving
+        valid_settings = {key: settings_dict.get(key, default_value)
+                          for key, default_value in self.DEFAULT_LABEL_SETTINGS.items()}
+
+        ui_settings = self.data.setdefault("ui_settings", {})
+        ui_settings["label_display"] = valid_settings
+        logging.info(f"Updating label settings in config data: {valid_settings}")
+        # The actual saving to file happens when self.save() is called externally
+        return True
+
+
     def save(self):
         """Saves the current configuration data to the file, creating a backup first."""
-        # Backup before writing
         backup_dir = os.path.join(os.path.dirname(self.path), "backup")
         os.makedirs(backup_dir, exist_ok=True)
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -118,8 +153,10 @@ class Config:
                 self.data.setdefault("commodities", {})
                 self.data.setdefault("pin_types", {})
                 self.data.setdefault("planet_types", {})
-                json.dump(self.data, f, indent=2, sort_keys=True) # Sort keys for consistency
+                self.data.setdefault("ui_settings", {}).setdefault("label_display", self.DEFAULT_LABEL_SETTINGS) # Ensure section exists
+                json.dump(self.data, f, indent=2, sort_keys=True)
             logging.info(f"Configuration saved successfully to {self.path}")
         except Exception as e:
              logging.error(f"Failed to save configuration to {self.path}: {e}")
-             raise # Re-raise so the caller knows saving failed
+             raise
+
